@@ -41,13 +41,29 @@ public final class Bot {
     private long lastReplyAt;
 
     Bot(AIBotPlugin plugin, String name, Location spawn, Settings settings) {
+        this(plugin, name, spawn, settings, null);
+    }
+
+    Bot(AIBotPlugin plugin, String name, Location spawn, Settings settings, String[] skinTextures) {
         this.plugin = plugin;
         this.name = name;
         this.settings = settings;
-        this.body = FakePlayer.create(spawn, name);
+        this.body = FakePlayer.create(spawn, name, skinTextures);
         if (body == null) throw new IllegalStateException("Fake player body could not be created");
         this.walker = new Walker(body);
         walker.setOnGiveUp(msg -> speak("* " + msg));
+    }
+
+    // ---------- skin ----------
+
+    private String skinInput;
+
+    public String skinInput() {
+        return skinInput;
+    }
+
+    public void setSkinInput(String skinInput) {
+        this.skinInput = skinInput;
     }
 
     // ---------- accessors ----------
@@ -231,6 +247,17 @@ public final class Bot {
     public void teleport(Location loc) {
         body.bukkit().teleport(loc);
         walker.stop();
+    }
+
+    /** Turns the bot's head toward an entity, like players naturally do. */
+    public void lookAt(Player target) {
+        Location eye = body.bukkit().getEyeLocation();
+        org.bukkit.util.Vector to = target.getEyeLocation().toVector().subtract(eye.toVector());
+        double dist = Math.hypot(to.getX(), to.getZ());
+        if (dist < 0.01) return;
+        float yaw = (float) Math.toDegrees(Math.atan2(-to.getX(), to.getZ()));
+        float pitch = (float) -Math.toDegrees(Math.atan2(to.getY(), dist));
+        body.setYawPitch(yaw, pitch);
     }
 
     // ---------- inventory ----------

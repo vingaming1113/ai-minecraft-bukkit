@@ -31,6 +31,7 @@ public final class Walker {
     private Location lastProgress;
     private int repathFails;
     private double vy;
+    private int swingTimer;
 
     /** Called when the bot gives up reaching its goal. */
     private Consumer<String> onGiveUp;
@@ -182,9 +183,13 @@ public final class Walker {
             dy = vy;
         }
 
-        // face the direction of travel
+        // face the direction of travel + swing arms while walking, like a real player
         float yaw = (float) Math.toDegrees(Math.atan2(-flat.getX(), flat.getZ()));
         body.setYawPitch(yaw, 0);
+        if (++swingTimer >= 6) {
+            swingTimer = 0;
+            body.swingHand();
+        }
 
         double speed = Math.min(WALK_SPEED, Math.max(0.05, dist));
         body.move(flat.getX() * speed, dy, flat.getZ() * speed);

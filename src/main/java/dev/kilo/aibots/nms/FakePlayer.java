@@ -292,6 +292,18 @@ public final class FakePlayer {
         }
     }
 
+    private static void injectSkin(Class<?> gameProfileClass, Object profile, String[] tex)
+            throws ReflectiveOperationException {
+        Class<?> propertyClass = Class.forName("com.mojang.authlib.Property");
+        Object property = tex[1] != null
+                ? propertyClass.getConstructor(String.class, String.class, String.class)
+                        .newInstance("textures", tex[0], tex[1])
+                : propertyClass.getConstructor(String.class, String.class)
+                        .newInstance("textures", tex[0]);
+        Object properties = gameProfileClass.getMethod("getProperties").invoke(profile);
+        properties.getClass().getMethod("put", Object.class, Object.class).invoke(properties, "textures", property);
+    }
+
     private static Method findMethod(Class<?> clazz, String name, Class<?>... params) {
         try {
             Method m = clazz.getMethod(name, params);

@@ -1,6 +1,9 @@
 package dev.kilo.aibots;
 
+import dev.kilo.aibots.skin.SkinResolver;
+import net.kyori.adventure.key.Key;
 import org.bukkit.Bukkit;
+import org.bukkit.Color;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -17,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /** Owns all bots: lifecycle, persistence, tick driver. */
 public final class BotManager {
@@ -24,6 +28,7 @@ public final class BotManager {
     private final AIBotPlugin plugin;
     private final Map<String, Bot> bots = new LinkedHashMap<>();
     private int tickTask = -1;
+    private int lookTimer;
 
     public BotManager(AIBotPlugin plugin) {
         this.plugin = plugin;
@@ -49,7 +54,20 @@ public final class BotManager {
         bots.values().forEach(Bot::resetChain);
     }
 
+    /** Resolves the skin off the main thread, then spawns on the main thread. */
+    public void resolveAndSpawn(String name, Location loc, Bot.Settings settings,
+                                String skinInput, Consumer<Bot> done) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            String[] tex = SkinResolver.resolve(skinInput);
+            Bukkit.getScheduler().runTask(plugin, () -> done.accept(spawn(name, loc, settings, tex)));
+        });
+    }
+
     public Bot spawn(String name, Location loc, Bot.Settings settings) {
+        return spawn(name, loc, settings, null);
+    }
+
+    public Bot spawn(String name, Location loc, Bot.Settings settings, String[] skinTextures) {
         if (botByName(name) != null) return null;
         // never spawn inside terrain or in the sky: snap to the highest safe block
         Location safe = loc.clone();
@@ -60,13 +78,20 @@ public final class BotManager {
             safe.setX(Math.floor(safe.getX()) + 0.5);
             safe.setZ(Math.floor(safe.getZ()) + 0.5);
         }
-        Bot bot = new Bot(plugin, name, safe, settings);
-        // visible custom name above the head like a real nametag
-        bot.body().bukkit().customName(net.kyori.adventure.text.Component.text(name));
-        bot.body().bukkit().setCustomNameVisible(true);
+        Bot bot = new Bot(plugin, name, safe, settings, skinTextures);
+
+        Player body = bot.body().bukkit();
+        body.customName(net.kyori.adventure.text.Component.text(name));
+        body.setCustomNameVisible(true);
+
+        // show up on the locator bar like a real player
+        try {
+            body.setWaypointColor(Color.AQUA);
+            body.setWaypointStyle(Key.key("minecraft", "default"));
+        } catch (Throwable ignored) {
+        }
+
         bots.put(name.toLowerCase(Locale.ROOT), bot);
-        // hide from tab list via ProtocolLib (hard dependency, also applied for late joiners)
-        plugin.packets().hideFromTabList(bot.body().bukkit().getUniqueId());
         return bot;
     }
 
@@ -74,6 +99,8 @@ public final class BotManager {
         Bot bot = bots.remove(name.toLowerCase(Locale.ROOT));
         if (bot == null) return false;
         bot.discard();
+        // clean the ghost tab entry left behind by a despawned fake player
+        plugin.packets().hideFromTabList(bot.body().bukkit().getUniqueId());
         return true;
     }
 
@@ -89,15 +116,20 @@ public final class BotManager {
         tickTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             for (Bot b : bots.values()) {
                 try {
-                    // void watchdog: if a bot ends up below the world (fell through
-                    // an unloaded chunk etc.) it dies like a real player would
                     Player body = b.body().bukkit();
-                    if (!body.isDead() && body.getLocation().getY() < b.body().bukkit().getWorld().getMinHeight() - 16) {
+                    // void watchdog: falling out of the world kills you
+                    if (!body.isDead() && body.getLocation().getY() < body.getWorld().getMinHeight() - 16) {
                         body.damage(1000.0);
                         continue;
                     }
                     if (body.isDead()) continue;
                     b.walker().tick();
+
+                    // polish: idle bots glance at the nearest player, like real ones do
+                    if (++lookTimer % 10 == 0 && !b.isBusy()) {
+                        Player near = nearestPlayer(body.getLocation(), 12.0);
+                        if (near != null && near != body) b.lookAt(near);
+                    }
                 } catch (Throwable t) {
                     plugin.getLogger().warning("[" + b.name() + "] movement error: " + t);
                     b.walker().stop();
@@ -132,6 +164,7 @@ public final class BotManager {
             yml.set(base + "persona", b.settings().persona());
             yml.set(base + "gamemode", b.settings().gamemode().name());
             yml.set(base + "allowCommands", b.settings().allowCommands());
+            yml.set(base + "skin", b.skinInput());
             List<String> inv = new ArrayList<>();
             b.inventoryMap().forEach((m, n) -> inv.add(m.name() + ":" + n));
             yml.set(base + "inventory", inv);
@@ -144,8 +177,14 @@ public final class BotManager {
         }
     }
 
-    /** Respawns persisted bots, falling back to config-defined ones. */
+    private record BotDef(String name, Location loc, Bot.Settings settings, Map<Material, Integer> inventory,
+                          String skinInput) {
+    }
+
+    /** Respawns persisted bots, falling back to config-defined ones. Skins resolve async. */
     public void loadAll() {
+        List<BotDef> defs = new ArrayList<>();
+
         File file = new File(plugin.getDataFolder(), "bots.yml");
         boolean restored = false;
         if (file.exists()) {
@@ -163,41 +202,59 @@ public final class BotManager {
                     GameMode gm = parseGamemode(s.getString("gamemode"));
                     Bot.Settings st = new Bot.Settings(
                             s.getString("persona", plugin.defaultPersona()), gm, s.getBoolean("allowCommands"));
-                    Bot bot = spawn(s.getString("name", "Bot" + key), loc, st);
-                    if (bot != null) {
-                        for (String entry : s.getStringList("inventory")) {
-                            String[] split = entry.split(":");
-                            Material m = Material.matchMaterial(split[0]);
-                            if (m != null && split.length > 1) {
-                                try {
-                                    bot.giveItem(new org.bukkit.inventory.ItemStack(m, Integer.parseInt(split[1])));
-                                } catch (NumberFormatException ignored) {
-                                }
+                    Map<Material, Integer> inv = new LinkedHashMap<>();
+                    for (String entry : s.getStringList("inventory")) {
+                        String[] split = entry.split(":");
+                        Material m = Material.matchMaterial(split[0]);
+                        if (m != null && split.length > 1) {
+                            try {
+                                inv.put(m, Integer.parseInt(split[1]));
+                            } catch (NumberFormatException ignored) {
                             }
                         }
-                        restored = true;
                     }
+                    defs.add(new BotDef(s.getString("name", "Bot" + key), loc, st, inv, s.getString("skin")));
+                    restored = true;
                 }
             }
         }
         if (!restored) {
-            // spawn bots from config.yml
+            World world = Bukkit.getWorlds().get(0);
             for (Map<?, ?> raw : plugin.getConfig().getMapList("bots")) {
                 Map<String, Object> def = castMap(raw);
-                String name = String.valueOf(def.getOrDefault("name", "Alex"));
-                World world = Bukkit.getWorlds().get(0);
-                Location loc = world.getSpawnLocation();
-                Bot.Settings st = new Bot.Settings(
-                        String.valueOf(def.getOrDefault("persona", plugin.defaultPersona())),
-                        parseGamemode(String.valueOf(def.getOrDefault("gamemode", "survival")).toUpperCase(Locale.ROOT)),
-                        Boolean.parseBoolean(String.valueOf(def.getOrDefault("allowCommands", "false"))));
-                Object gmObj = def.get("gamemode");
-                if (gmObj instanceof String g && g.equalsIgnoreCase("creative")) {
-                    st = new Bot.Settings(st.persona(), GameMode.CREATIVE, st.allowCommands());
-                }
-                spawn(name, loc, st);
+                GameMode gm = Boolean.parseBoolean(String.valueOf(def.getOrDefault("creative", def.getOrDefault("gamemode", "survival"))))
+                        ? GameMode.CREATIVE : parseGamemode(String.valueOf(def.getOrDefault("gamemode", "survival")).toUpperCase(Locale.ROOT));
+                defs.add(new BotDef(
+                        String.valueOf(def.getOrDefault("name", "Alex")),
+                        world.getSpawnLocation(),
+                        new Bot.Settings(
+                                String.valueOf(def.getOrDefault("persona", plugin.defaultPersona())),
+                                parseGamemode(String.valueOf(def.getOrDefault("gamemode", "survival")).toUpperCase(Locale.ROOT)),
+                                Boolean.parseBoolean(String.valueOf(def.getOrDefault("allowCommands", "false")))),
+                        Map.of(),
+                        def.get("skin") != null ? String.valueOf(def.get("skin")) : null));
             }
         }
+
+        // resolve skins off-thread, then spawn everything on the main thread
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            List<PendingSpawn> pending = new ArrayList<>();
+            for (BotDef def : defs) {
+                pending.add(new PendingSpawn(def, SkinResolver.resolve(def.skinInput())));
+            }
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                for (PendingSpawn p : pending) {
+                    Bot bot = spawn(p.def().name(), p.def().loc(), p.def().settings(), p.tex());
+                    if (bot != null) {
+                        bot.setSkinInput(p.def().skinInput());
+                        p.def().inventory().forEach((m, n) -> bot.giveItem(new org.bukkit.inventory.ItemStack(m, n)));
+                    }
+                }
+            });
+        });
+    }
+
+    private record PendingSpawn(BotDef def, String[] tex) {
     }
 
     private GameMode parseGamemode(String name) {
@@ -217,9 +274,9 @@ public final class BotManager {
         return out;
     }
 
-    public Player nearestPlayer(Location loc) {
+    public Player nearestPlayer(Location loc, double maxRange) {
         Player best = null;
-        double bestDist = Double.MAX_VALUE;
+        double bestDist = maxRange;
         for (Player p : Bukkit.getOnlinePlayers()) {
             if (!p.getWorld().equals(loc.getWorld())) continue;
             double d = p.getLocation().distance(loc);

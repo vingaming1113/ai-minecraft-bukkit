@@ -33,6 +33,7 @@ public final class AIBotCommand implements TabExecutor {
             case "list" -> list(sender);
             case "say" -> say(sender, args);
             case "stop" -> stop(sender, args);
+            case "skin" -> skin(sender, args);
             case "reload" -> reload(sender);
             case "info" -> info(sender, args);
             default -> help(sender, label);
@@ -42,15 +43,16 @@ public final class AIBotCommand implements TabExecutor {
 
     private void spawn(CommandSender sender, String[] args) {
         if (args.length < 2) {
-            err(sender, "Usage: /aibot spawn <name> [gamemode:survival|creative] [commands:true|false] [persona ...]");
+            err(sender, "Usage: /aibot spawn <name> [skin:<playerName>] [gamemode:survival|creative] [commands:true|false] [persona ...]");
             return;
         }
         String name = args[1];
         GameMode gm = plugin.defaultGamemode();
         boolean allowCmds = plugin.defaultAllowCommands();
+        String skinInput = null;
         StringBuilder persona = new StringBuilder(plugin.defaultPersona());
         for (int i = 2; i < args.length; i++) {
-            if (args[i].toLowerCase(Locale.ROOT).startsWith("gamemode:") && i + 1 <= args.length) {
+            if (args[i].toLowerCase(Locale.ROOT).startsWith("gamemode:")) {
                 gm = parseGamemode(args[i].substring(9));
             } else if (args[i].equalsIgnoreCase("creative")) {
                 gm = GameMode.CREATIVE;
@@ -58,16 +60,51 @@ public final class AIBotCommand implements TabExecutor {
                 gm = GameMode.SURVIVAL;
             } else if (args[i].toLowerCase(Locale.ROOT).startsWith("commands:")) {
                 allowCmds = Boolean.parseBoolean(args[i].substring(9));
+            } else if (args[i].toLowerCase(Locale.ROOT).startsWith("skin:")) {
+                skinInput = args[i].substring(5);
             } else {
                 if (persona.length() > 0) persona.append(' ');
                 persona.append(args[i]);
             }
         }
         Location loc = sender instanceof Player p ? p.getLocation() : plugin.getServer().getWorlds().get(0).getSpawnLocation();
-        Bot bot = plugin.botManager().spawn(name, loc, new Bot.Settings(persona.toString(), gm, allowCmds));
-        if (bot == null) err(sender, "A bot with that name already exists.");
-        else ok(sender, "Spawned bot " + name + " (" + gm.name().toLowerCase(Locale.ROOT)
-                + ", commands: " + (allowCmds ? "on" : "off") + ").");
+        Bot.Settings settings = new Bot.Settings(persona.toString(), gm, allowCmds);
+        ok(sender, "Resolving skin & spawning " + name + "...");
+        plugin.botManager().resolveAndSpawn(name, loc, settings, skinInput, bot -> {
+            if (bot == null) err(sender, "A bot with that name already exists.");
+            else {
+                bot.setSkinInput(skinInput);
+                ok(sender, "Spawned bot " + name + " (" + gm.name().toLowerCase(Locale.ROOT)
+                        + ", commands: " + (allowCmds ? "on" : "off")
+                        + ", skin: " + (skinInput != null ? "custom" : "default") + ").");
+            }
+        });
+    }
+
+    private void skin(CommandSender sender, String[] args) {
+        if (args.length < 3) {
+            err(sender, "Usage: /aibot skin <botName> <playerName|base64Texture>");
+            return;
+        }
+        Bot old = plugin.botManager().botByName(args[1]);
+        if (old == null) {
+            err(sender, "No such bot.");
+            return;
+        }
+        Location loc = old.body().location();
+        Bot.Settings settings = old.settings();
+        Map<org.bukkit.Material, Integer> inv = new java.util.LinkedHashMap<>(old.inventoryMap());
+        String skinInput = args[2];
+        plugin.botManager().remove(old.name());
+        plugin.botManager().resolveAndSpawn(old.name(), loc, settings, skinInput, bot -> {
+            if (bot == null) {
+                err(sender, "Re-spawn failed - try /aibot spawn.");
+                return;
+            }
+            bot.setSkinInput(skinInput);
+            inv.forEach((m, n) -> bot.giveItem(new org.bukkit.inventory.ItemStack(m, n)));
+            ok(sender, "Applied new skin to " + old.name() + ".");
+        });
     }
 
     private void remove(CommandSender sender, String[] args) {
