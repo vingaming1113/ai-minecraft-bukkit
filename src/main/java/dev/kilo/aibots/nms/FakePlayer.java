@@ -40,6 +40,14 @@ public final class FakePlayer {
 
     /** Returns null (and logs once) if this server build doesn't support fake players. */
     public static synchronized FakePlayer create(Location loc, String name) {
+        return create(loc, name, null);
+    }
+
+    /**
+     * @param skinTextures optional {value, signature} pair injected into the GameProfile,
+     *                     making the bot wear that skin. Null signature = unsigned (works for NPCs).
+     */
+    public static synchronized FakePlayer create(Location loc, String name, String[] skinTextures) {
         if (failed) return null;
         try {
             // Bukkit.getServer() IS a CraftServer at runtime; get its NMS MinecraftServer
@@ -57,6 +65,10 @@ public final class FakePlayer {
             Class<?> gameProfileClass = Class.forName("com.mojang.authlib.GameProfile");
             Object profile = gameProfileClass.getConstructor(UUID.class, String.class)
                     .newInstance(UUID.randomUUID(), name);
+
+            if (skinTextures != null && skinTextures.length >= 2 && skinTextures[0] != null) {
+                injectSkin(gameProfileClass, profile, skinTextures);
+            }
 
             Constructor<?> ctor = null;
             for (Constructor<?> c : serverPlayerClass.getDeclaredConstructors()) {
