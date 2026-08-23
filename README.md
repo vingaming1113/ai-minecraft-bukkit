@@ -25,7 +25,7 @@ GitHub Actions builds every commit automatically (`.github/workflows/build.yml`)
 
 ## Setup
 
-1. Drop `AIBots-1.0.0.jar` into `plugins/`.
+1. Drop `AIBots-1.0.1.jar` into `plugins/`.
 2. Edit `plugins/AIBots/config.yml`:
 
 ```yaml

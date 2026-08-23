@@ -1,14 +1,15 @@
 name: AIBots
-version: '1.0.0'
+version: '1.0.1'
 main: dev.kilo.aibots.AIBotPlugin
 api-version: '26.2'
 description: Physical AI players with LLM brains - walk, craft, mine, place and chat like real players.
+softdepend: []
 depend: [ProtocolLib]
 author: kilo
 commands:
   aibot:
     description: Manage AI bots
-    usage: /aibot <spawn|remove|list|say|stop|reload|info>
+    usage: /aibot <spawn|remove|list|say|stop|info|reload>
     permission: aibots.admin
 permissions:
   aibots.admin:

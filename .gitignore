@@ -1,3 +1,4 @@
 target/
+.jdk/
 *.iml
 .idea/

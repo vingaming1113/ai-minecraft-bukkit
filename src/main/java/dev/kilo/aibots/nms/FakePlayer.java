@@ -71,6 +71,8 @@ public final class FakePlayer {
             ctor.setAccessible(true);
             Object sp = ctor.newInstance(mcServer, serverLevel, profile, clientInfo);
 
+            attachBlackHoleConnection(sp, serverPlayerClass, mcServer, mcServerClass(serverPlayerClass), gameProfileClass, profile);
+
             // position before adding to world
             Method setPos = findMethod(serverPlayerClass, "setPos", double.class, double.class, double.class);
             setPos.invoke(sp, loc.getX(), loc.getY(), loc.getZ());
@@ -129,6 +131,91 @@ public final class FakePlayer {
 
     private static void getLoggerStatic(Exception e) {
         org.bukkit.Bukkit.getLogger().severe("[AIBots] Fake players unsupported on this server build: " + e);
+    }
+
+    /**
+     * Vanilla systems (clock sync, PlayerList broadcasts, ...) send packets to every
+     * ServerPlayer via player.connection. A fake player has no network connection,
+     * which crashes the server tick with an NPE. We attach a "black hole" connection:
+     * a bare Connection (no channel) wrapped in a real ServerGamePacketListenerImpl.
+     * Packets sent into it are queued and never flushed - completely harmless.
+     */
+    private static void attachBlackHoleConnection(Object sp, Class<?> serverPlayerClass, Object mcServer,
+                                                  Class<?> mcServerClass, Class<?> gameProfileClass, Object profile) {
+        try {
+            Class<?> flowClass = Class.forName("net.minecraft.network.protocol.PacketFlow");
+            Object serverbound = Enum.valueOf((Class<? extends Enum>) flowClass.asSubclass(Enum.class), "SERVERBOUND");
+
+            Class<?> connectionClass = Class.forName("net.minecraft.network.Connection");
+            Constructor<?> connectionCtor = null;
+            for (Constructor<?> c : connectionClass.getDeclaredConstructors()) {
+                Class<?>[] p = c.getParameterTypes();
+                if (p.length == 1 && p[0] == flowClass) {
+                    connectionCtor = c;
+                    break;
+                }
+            }
+            if (connectionCtor == null) throw new IllegalStateException("Connection ctor not found");
+            connectionCtor.setAccessible(true);
+            Object connection = connectionCtor.newInstance(serverbound);
+
+            Class<?> cookieClass = Class.forName("net.minecraft.server.network.CommonListenerCookie");
+            Object cookie = cookieClass.getMethod("createInitial", gameProfileClass, boolean.class)
+                    .invoke(null, profile, false);
+
+            Class<?> listenerClass = Class.forName("net.minecraft.server.network.ServerGamePacketListenerImpl");
+            Constructor<?> listenerCtor = null;
+            boolean takesPlayer = false;
+            for (Constructor<?> c : listenerClass.getDeclaredConstructors()) {
+                Class<?>[] p = c.getParameterTypes();
+                // shape A: (MinecraftServer, Connection, ServerPlayer, CommonListenerCookie)
+                if (p.length == 4 && p[0] == mcServerClass && p[1] == connectionClass
+                        && p[2] == serverPlayerClass && p[3] == cookieClass) {
+                    listenerCtor = c;
+                    takesPlayer = true;
+                    break;
+                }
+                // older shape: (MinecraftServer, Connection, CommonListenerCookie)
+                if (p.length == 3 && p[0] == mcServerClass && p[1] == connectionClass && p[2] == cookieClass) {
+                    listenerCtor = c;
+                    break;
+                }
+            }
+            if (listenerCtor == null) throw new IllegalStateException("ServerGamePacketListenerImpl ctor not found");
+            listenerCtor.setAccessible(true);
+            Object listener = takesPlayer
+                    ? listenerCtor.newInstance(mcServer, connection, sp, cookie)
+                    : listenerCtor.newInstance(mcServer, connection, cookie);
+
+            Field connectionField = null;
+            for (Class<?> k = serverPlayerClass; k != null && connectionField == null; k = k.getSuperclass()) {
+                for (Field f : k.getDeclaredFields()) {
+                    if (f.getName().equals("connection") && f.getType() == listenerClass) {
+                        connectionField = f;
+                        break;
+                    }
+                }
+            }
+            if (connectionField == null) throw new IllegalStateException("'connection' field not found");
+            connectionField.setAccessible(true);
+            connectionField.set(sp, listener);
+
+            org.bukkit.Bukkit.getLogger().info("[AIBots] Attached black-hole connection to bot body.");
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            org.bukkit.Bukkit.getLogger().warning("[AIBots] Could not attach dummy connection - "
+                    + "vanilla broadcasts may NPE (" + e + ")");
+        }
+    }
+
+    private static Class<?> mcServerClass(Class<?> serverPlayerClass) {
+        // resolve net.minecraft.server.MinecraftServer from the first constructor param
+        for (Constructor<?> c : serverPlayerClass.getDeclaredConstructors()) {
+            Class<?>[] p = c.getParameterTypes();
+            if (p.length >= 1 && p[0].getName().equals("net.minecraft.server.MinecraftServer")) {
+                return p[0];
+            }
+        }
+        throw new IllegalStateException("MinecraftServer class not found");
     }
 
     public Player bukkit() {
