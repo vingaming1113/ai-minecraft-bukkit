@@ -37,6 +37,7 @@ final class Actions {
             case "give" -> give(parts);
             case "drop" -> drop(parts.length > 1 ? parts[1] : "", parts.length > 2 ? num(parts[2]) : 1);
             case "inventory" -> bot.speak("I'm carrying: " + bot.inventorySummary());
+            case "tp", "teleport" -> tp(parts);
             case "command" -> command(line.substring(line.indexOf(' ') + 1));
             default -> {
                 return false;
@@ -182,6 +183,36 @@ final class Actions {
         Location loc = bot.body().location().add(0, 1, 0);
         bot.body().bukkit().getWorld().dropItemNaturally(loc, new ItemStack(m, count));
         bot.speak("Dropped " + count + "x " + pretty(m) + ".");
+    }
+
+    private void tp(String[] parts) {
+        if (!bot.settings().allowCommands()) {
+            bot.speak("I'm not allowed to use commands, so no teleporting for me.");
+            return;
+        }
+        if (parts.length < 2) return;
+        try {
+            Location cur = bot.body().location();
+            Location target;
+            Player p = Bukkit.getPlayerExact(parts[1]);
+            if (p != null && p.isOnline()) {
+                target = p.getLocation();
+            } else if (parts.length >= 4) {
+                target = new Location(cur.getWorld(), Double.parseDouble(parts[1]),
+                        Double.parseDouble(parts[2]), Double.parseDouble(parts[3]));
+            } else if (parts.length == 3) {
+                target = new Location(cur.getWorld(), Double.parseDouble(parts[1]),
+                        cur.getBlockY(), Double.parseDouble(parts[2]));
+            } else {
+                bot.speak("Usage: !tp <x> <y> <z> or !tp <player>");
+                return;
+            }
+            bot.walker().stop();
+            bot.teleport(target);
+            bot.speak("Teleported to " + target.getBlockX() + " " + target.getBlockY() + " " + target.getBlockZ() + ".");
+        } catch (NumberFormatException e) {
+            bot.speak("Those aren't coordinates I understand.");
+        }
     }
 
     private void command(String cmd) {

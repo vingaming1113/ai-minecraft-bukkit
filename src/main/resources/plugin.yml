@@ -1,5 +1,5 @@
 name: AIBots
-version: '1.0.1'
+version: '1.0.2'
 main: dev.kilo.aibots.AIBotPlugin
 api-version: '26.2'
 description: Physical AI players with LLM brains - walk, craft, mine, place and chat like real players.

@@ -51,7 +51,16 @@ public final class BotManager {
 
     public Bot spawn(String name, Location loc, Bot.Settings settings) {
         if (botByName(name) != null) return null;
-        Bot bot = new Bot(plugin, name, loc, settings);
+        // never spawn inside terrain or in the sky: snap to the highest safe block
+        Location safe = loc.clone();
+        World w = loc.getWorld();
+        int top = w.getHighestBlockYAt(safe.getBlockX(), safe.getBlockZ());
+        if (top > w.getMinHeight()) {
+            safe.setY(top + 1.0);
+            safe.setX(Math.floor(safe.getX()) + 0.5);
+            safe.setZ(Math.floor(safe.getZ()) + 0.5);
+        }
+        Bot bot = new Bot(plugin, name, safe, settings);
         // visible custom name above the head like a real nametag
         bot.body().bukkit().customName(net.kyori.adventure.text.Component.text(name));
         bot.body().bukkit().setCustomNameVisible(true);
@@ -80,6 +89,14 @@ public final class BotManager {
         tickTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             for (Bot b : bots.values()) {
                 try {
+                    // void watchdog: if a bot ends up below the world (fell through
+                    // an unloaded chunk etc.) it dies like a real player would
+                    Player body = b.body().bukkit();
+                    if (!body.isDead() && body.getLocation().getY() < b.body().bukkit().getWorld().getMinHeight() - 16) {
+                        body.damage(1000.0);
+                        continue;
+                    }
+                    if (body.isDead()) continue;
                     b.walker().tick();
                 } catch (Throwable t) {
                     plugin.getLogger().warning("[" + b.name() + "] movement error: " + t);

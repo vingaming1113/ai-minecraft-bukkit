@@ -39,6 +39,7 @@ public final class AIBotPlugin extends JavaPlugin {
         this.botManager = new BotManager(this);
 
         getServer().getPluginManager().registerEvents(new BotChatListener(this), this);
+        getServer().getPluginManager().registerEvents(new BotLifeListener(this), this);
 
         PluginCommand cmd = getCommand("aibot");
         AIBotCommand executor = new AIBotCommand(this);

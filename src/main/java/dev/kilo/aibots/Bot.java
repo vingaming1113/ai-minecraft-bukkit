@@ -189,6 +189,7 @@ public final class Bot {
                 """);
         if (settings.allowCommands()) {
             sb.append("!command <command>                       run a server command (you are allowed)\n");
+            sb.append("!tp <x> <y> <z> | <player>                teleport (you are allowed to use commands)\n");
         }
         sb.append("""
                 Rules:
@@ -227,6 +228,11 @@ public final class Bot {
         body.swingHand();
     }
 
+    public void teleport(Location loc) {
+        body.bukkit().teleport(loc);
+        walker.stop();
+    }
+
     // ---------- inventory ----------
 
     public void giveItem(ItemStack stack) {
@@ -259,6 +265,19 @@ public final class Bot {
         int have = count(m);
         if (have <= amount) inventory.remove(m);
         else inventory.put(m, have - amount);
+    }
+
+    /** Drops everything the bot carries at the given location (death). */
+    public void dropInventoryAt(Location loc) {
+        for (var e : List.copyOf(inventory.entrySet())) {
+            int left = e.getValue();
+            while (left > 0) {
+                int stack = Math.min(left, e.getKey().getMaxStackSize());
+                loc.getWorld().dropItemNaturally(loc, new ItemStack(e.getKey(), stack));
+                left -= stack;
+            }
+        }
+        inventory.clear();
     }
 
     public Material firstPlaceable() {
