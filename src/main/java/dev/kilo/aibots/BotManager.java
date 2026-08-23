@@ -56,6 +56,10 @@ public final class BotManager {
         bot.body().bukkit().customName(net.kyori.adventure.text.Component.text(name));
         bot.body().bukkit().setCustomNameVisible(true);
         bots.put(name.toLowerCase(Locale.ROOT), bot);
+        // hide from tab list via ProtocolLib when available (also applied for late joiners)
+        if (plugin.packets() != null) {
+            plugin.packets().hideFromTabList(bot.body().bukkit().getUniqueId());
+        }
         return bot;
     }
 

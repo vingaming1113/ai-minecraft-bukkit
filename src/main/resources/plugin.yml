@@ -3,6 +3,7 @@ version: '1.0.0'
 main: dev.kilo.aibots.AIBotPlugin
 api-version: '26.2'
 description: Physical AI players with LLM brains - walk, craft, mine, place and chat like real players.
+softdepend: [ProtocolLib]
 author: kilo
 commands:
   aibot:

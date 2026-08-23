@@ -1,6 +1,7 @@
 package dev.kilo.aibots;
 
 import dev.kilo.aibots.llm.LLMService;
+import dev.kilo.aibots.packets.PacketManager;
 import org.bukkit.GameMode;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -10,6 +11,7 @@ public final class AIBotPlugin extends JavaPlugin {
 
     private BotManager botManager;
     private LLMService llm;
+    private PacketManager packetManager;
 
     private boolean mentionOnly;
     private int hearingRange;
@@ -27,6 +29,9 @@ public final class AIBotPlugin extends JavaPlugin {
 
         this.llm = new LLMService(getConfig().getConfigurationSection("ai"));
         this.botManager = new BotManager(this);
+        this.packetManager = PacketManager.create(this,
+                getConfig().getBoolean("performance.hide-from-tab-list", true),
+                () -> botManager.all().stream().map(b -> b.body().bukkit().getUniqueId()).toList());
 
         getServer().getPluginManager().registerEvents(new BotChatListener(this), this);
 
@@ -82,6 +87,10 @@ public final class AIBotPlugin extends JavaPlugin {
 
     public LLMService llm() {
         return llm;
+    }
+
+    public PacketManager packets() {
+        return packetManager;
     }
 
     public boolean mentionOnly() {
