@@ -33,19 +33,26 @@ public final class PacketManager implements Listener {
         this.botUuids = botUuids;
     }
 
-    /** Returns null when ProtocolLib is not installed or disabled in config. */
+    /**
+     * Creates the packet manager. ProtocolLib is a hard dependency - returns null
+     * only if it is missing or incompatible, which disables the plugin.
+     */
     public static PacketManager create(org.bukkit.plugin.java.JavaPlugin plugin, boolean configEnabled,
                                        Supplier<List<UUID>> botUuids) {
-        if (!configEnabled || Bukkit.getPluginManager().getPlugin("ProtocolLib") == null) {
+        if (Bukkit.getPluginManager().getPlugin("ProtocolLib") == null) {
+            Bukkit.getLogger().severe("[AIBots] ProtocolLib is required but not installed! Download it from:");
+            Bukkit.getLogger().severe("[AIBots] https://modrinth.com/plugin/protocollib");
             return null;
         }
         try {
             PacketManager pm = new PacketManager(ProtocolLibrary.getProtocolManager(), true, botUuids);
             Bukkit.getPluginManager().registerEvents(pm, plugin);
+            Bukkit.getLogger().info("[AIBots] Hooked into ProtocolLib " + Bukkit.getPluginManager()
+                    .getPlugin("ProtocolLib").getDescription().getVersion());
             return pm;
         } catch (Throwable t) {
-            Bukkit.getLogger().warning("[AIBots] ProtocolLib present but incompatible (" + t.getMessage()
-                    + ") - continuing without packet optimizations.");
+            Bukkit.getLogger().severe("[AIBots] ProtocolLib is installed but incompatible with this server "
+                    + "build (" + t.getMessage() + "). Update ProtocolLib.");
             return null;
         }
     }

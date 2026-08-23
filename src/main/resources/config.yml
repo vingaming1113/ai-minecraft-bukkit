@@ -37,8 +37,8 @@ defaults:
 
 # Performance
 performance:
-  # Requires ProtocolLib. Removes bots from the tab list with a single packet
-  # (also re-applied for players joining later). Falls back silently if ProtocolLib is missing.
+  # Removes bots from the tab list with a single packet via ProtocolLib (required
+  # dependency), and re-applies it for players joining later.
   hide-from-tab-list: true
 
 # Bots defined here are spawned automatically on server start.

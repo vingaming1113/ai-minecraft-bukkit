@@ -28,10 +28,15 @@ public final class AIBotPlugin extends JavaPlugin {
         loadSettings();
 
         this.llm = new LLMService(getConfig().getConfigurationSection("ai"));
-        this.botManager = new BotManager(this);
         this.packetManager = PacketManager.create(this,
                 getConfig().getBoolean("performance.hide-from-tab-list", true),
                 () -> botManager.all().stream().map(b -> b.body().bukkit().getUniqueId()).toList());
+        if (packetManager == null) {
+            getLogger().severe("Disabling AIBots - ProtocolLib is required.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+        this.botManager = new BotManager(this);
 
         getServer().getPluginManager().registerEvents(new BotChatListener(this), this);
 
