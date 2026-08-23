@@ -29,7 +29,6 @@ public final class AIBotPlugin extends JavaPlugin {
 
         this.llm = new LLMService(getConfig().getConfigurationSection("ai"));
         this.packetManager = PacketManager.create(this,
-                getConfig().getBoolean("performance.hide-from-tab-list", true),
                 () -> botManager.all().stream().map(b -> b.body().bukkit().getUniqueId()).toList());
         if (packetManager == null) {
             getLogger().severe("Disabling AIBots - ProtocolLib is required.");

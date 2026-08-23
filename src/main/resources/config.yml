@@ -37,9 +37,8 @@ defaults:
 
 # Performance
 performance:
-  # Removes bots from the tab list with a single packet via ProtocolLib (required
-  # dependency), and re-applies it for players joining later.
-  hide-from-tab-list: true
+  # ProtocolLib (required) cleans up a bot's tab-list entry when it despawns.
+  # While alive the entry MUST stay, otherwise clients render the bot invisible.
 
 # Bots defined here are spawned automatically on server start.
 bots:
@@ -47,3 +46,4 @@ bots:
     persona: "You are Alex, a cheerful builder. You love redstone and big projects."
     gamemode: survival
     allow-commands: false
+    skin: "Notch"          # any premium Minecraft username (or raw base64 texture value)

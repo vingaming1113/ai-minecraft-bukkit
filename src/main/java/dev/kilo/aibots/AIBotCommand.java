@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public final class AIBotCommand implements TabExecutor {
 
@@ -68,15 +69,16 @@ public final class AIBotCommand implements TabExecutor {
             }
         }
         Location loc = sender instanceof Player p ? p.getLocation() : plugin.getServer().getWorlds().get(0).getSpawnLocation();
-        Bot.Settings settings = new Bot.Settings(persona.toString(), gm, allowCmds);
+        final Bot.Settings settings = new Bot.Settings(persona.toString(), gm, allowCmds);
+        final String finalSkinInput = skinInput;
         ok(sender, "Resolving skin & spawning " + name + "...");
         plugin.botManager().resolveAndSpawn(name, loc, settings, skinInput, bot -> {
             if (bot == null) err(sender, "A bot with that name already exists.");
             else {
-                bot.setSkinInput(skinInput);
-                ok(sender, "Spawned bot " + name + " (" + gm.name().toLowerCase(Locale.ROOT)
-                        + ", commands: " + (allowCmds ? "on" : "off")
-                        + ", skin: " + (skinInput != null ? "custom" : "default") + ").");
+                bot.setSkinInput(finalSkinInput);
+                ok(sender, "Spawned bot " + name + " (" + settings.gamemode().name().toLowerCase(Locale.ROOT)
+                        + ", commands: " + (settings.allowCommands() ? "on" : "off")
+                        + ", skin: " + (finalSkinInput != null ? "custom" : "default") + ").");
             }
         });
     }
@@ -176,7 +178,8 @@ public final class AIBotCommand implements TabExecutor {
     }
 
     private void help(CommandSender sender, String label) {
-        sender.sendMessage(Component.text("/" + label + " spawn <name> [survival|creative] [commands:true|false] [persona...]", NamedTextColor.AQUA));
+        sender.sendMessage(Component.text("/" + label + " spawn <name> [skin:<playerName>] [survival|creative] [commands:true|false] [persona...]", NamedTextColor.AQUA));
+        sender.sendMessage(Component.text("/" + label + " skin <name> <playerName|base64Texture>", NamedTextColor.AQUA));
         sender.sendMessage(Component.text("/" + label + " remove|list|say|stop|info|reload", NamedTextColor.AQUA));
     }
 

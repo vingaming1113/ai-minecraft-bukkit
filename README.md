@@ -38,7 +38,8 @@ bots:
   - name: "Alex"                # username shown in chat & nametag
     persona: "You are Alex, a cheerful builder."
     gamemode: survival          # survival | creative
-    allow-commands: false
+    allow-commands: false       # when true the AI may also !tp and run server commands
+    skin: "Notch"               # premium Minecraft username for the bot's skin (optional)
 ```
 
 3. Restart. Bots spawn at the world spawn (or their saved position).
@@ -46,7 +47,8 @@ bots:
 ## Commands
 
 ```
-/aibot spawn <name> [survival|creative] [commands:true|false] [persona words...]
+/aibot spawn <name> [skin:<playerName>] [survival|creative] [commands:true|false] [persona words...]
+/aibot skin <botName> <playerName|base64Texture>
 /aibot remove <name>
 /aibot list
 /aibot info <name>
@@ -71,6 +73,12 @@ Let me go check that out!
 - Bots appear in the tab list like real players (they *are* real server-side player entities).
 - Like all fake-player implementations on Paper, chunks only stay loaded while real players are nearby.
 - If a future Paper build changes internal mappings, the plugin logs a clear error instead of crashing.
+
+## Like a real player
+
+- **Visible & real** — bots are genuine player entities: they render with skins, show in the tab list (required for rendering), appear in the locator bar, and are selectable by vanilla selectors/commands (`@p`, `/tp`, ...).
+- **Custom skins** — set `skin: <premium username>` per bot in config, use `skin:<username>` on spawn, or change live with `/aibot skin <bot> <username>`. Raw base64 texture values also work. Skins resolve from Mojang's session servers (async, cached).
+- **Polish** — idle bots turn their heads toward the nearest player; walking bots swing their arms.
 
 ## Performance
 
