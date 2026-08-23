@@ -106,6 +106,18 @@ public final class Bot {
         Bukkit.getScheduler().runTaskLater(plugin, () -> think(senderIsBot), delay / 50L);
     }
 
+    /** Direct prompt via /aibot say - always answered. */
+    public void hearDirect(String text) {
+        remember("user", text);
+        plugin.botManager().resetChains();
+        long delay = ThreadLocalRandom.current().nextLong(plugin.replyDelayMinMs(), plugin.replyDelayMaxMs());
+        Bukkit.getScheduler().runTaskLater(plugin, this::thinkNow, delay / 50L);
+    }
+
+    private void thinkNow() {
+        think(false);
+    }
+
     private boolean isAddressed(String message) {
         String lower = message.toLowerCase(Locale.ROOT);
         String me = name.toLowerCase(Locale.ROOT);

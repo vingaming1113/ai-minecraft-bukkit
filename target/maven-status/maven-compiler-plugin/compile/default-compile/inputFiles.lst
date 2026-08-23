@@ -1,0 +1,10 @@
+/workspace/d81b311f-83e7-4833-87ab-b9ca6b53c04a/sessions/agent_cdc53b65-ee0c-41ec-a367-a58818959127/src/main/java/dev/kilo/aibots/AIBotCommand.java
+/workspace/d81b311f-83e7-4833-87ab-b9ca6b53c04a/sessions/agent_cdc53b65-ee0c-41ec-a367-a58818959127/src/main/java/dev/kilo/aibots/AIBotPlugin.java
+/workspace/d81b311f-83e7-4833-87ab-b9ca6b53c04a/sessions/agent_cdc53b65-ee0c-41ec-a367-a58818959127/src/main/java/dev/kilo/aibots/Actions.java
+/workspace/d81b311f-83e7-4833-87ab-b9ca6b53c04a/sessions/agent_cdc53b65-ee0c-41ec-a367-a58818959127/src/main/java/dev/kilo/aibots/Bot.java
+/workspace/d81b311f-83e7-4833-87ab-b9ca6b53c04a/sessions/agent_cdc53b65-ee0c-41ec-a367-a58818959127/src/main/java/dev/kilo/aibots/BotChatListener.java
+/workspace/d81b311f-83e7-4833-87ab-b9ca6b53c04a/sessions/agent_cdc53b65-ee0c-41ec-a367-a58818959127/src/main/java/dev/kilo/aibots/BotManager.java
+/workspace/d81b311f-83e7-4833-87ab-b9ca6b53c04a/sessions/agent_cdc53b65-ee0c-41ec-a367-a58818959127/src/main/java/dev/kilo/aibots/llm/LLMService.java
+/workspace/d81b311f-83e7-4833-87ab-b9ca6b53c04a/sessions/agent_cdc53b65-ee0c-41ec-a367-a58818959127/src/main/java/dev/kilo/aibots/nav/PathFinder.java
+/workspace/d81b311f-83e7-4833-87ab-b9ca6b53c04a/sessions/agent_cdc53b65-ee0c-41ec-a367-a58818959127/src/main/java/dev/kilo/aibots/nav/Walker.java
+/workspace/d81b311f-83e7-4833-87ab-b9ca6b53c04a/sessions/agent_cdc53b65-ee0c-41ec-a367-a58818959127/src/main/java/dev/kilo/aibots/nms/FakePlayer.java
