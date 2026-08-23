@@ -76,13 +76,18 @@ public final class Walker {
         if (goal == null) return;
         World w = body.bukkit().getWorld();
         Location cur = body.location();
-        List<BlockVector> p = PathFinder.find(w, cur, goal, 6000);
-        if (p.isEmpty()) {
-            // fall back to direct steering for short/straight hops
-            path = List.of(new BlockVector(goal.getBlockX(), goal.getBlockY(), goal.getBlockZ()));
+        List<BlockVector> p;
+        // fast path: straight walkable line beats running A*
+        List<BlockVector> direct = PathFinder.tryDirect(w, cur, goal);
+        if (direct != null) {
+            p = direct;
         } else {
-            path = p;
+            p = PathFinder.find(w, cur, goal, 6000);
+            if (p.isEmpty()) {
+                p = List.of(new BlockVector(goal.getBlockX(), goal.getBlockY(), goal.getBlockZ()));
+            }
         }
+        path = p;
         pathIndex = 0;
         repathTimer = 40;
         stuckTicks = 0;
@@ -90,6 +95,9 @@ public final class Walker {
 
     /** Runs every tick from the main thread. */
     public void tick() {
+        // idle + grounded = nothing to simulate at all (zero-cost tick)
+        if (goal == null && body.onGround() && vy == 0) return;
+
         Location cur = body.location();
         World w = cur.getWorld();
 
@@ -108,7 +116,12 @@ public final class Walker {
         }
 
         if (goal == null) {
-            applyGravityOnly();
+            if (body.onGround()) {
+                vy = 0;
+            } else {
+                vy = (vy - 0.08) * 0.98;
+                body.move(0, vy, 0);
+            }
             return;
         }
 
@@ -188,14 +201,5 @@ public final class Walker {
             pathIndex++;
         }
         return null;
-    }
-
-    private void applyGravityOnly() {
-        if (!body.onGround()) {
-            vy = (vy - 0.08) * 0.98;
-            body.move(0, vy, 0);
-        } else {
-            vy = 0;
-        }
     }
 }

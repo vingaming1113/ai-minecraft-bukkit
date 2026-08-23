@@ -35,6 +35,12 @@ defaults:
   allow-commands: false   # may the bot run server commands via !command
   persona: "You are a helpful player who loves building and exploring."
 
+# Performance
+performance:
+  # Requires ProtocolLib. Removes bots from the tab list with a single packet
+  # (also re-applied for players joining later). Falls back silently if ProtocolLib is missing.
+  hide-from-tab-list: true
+
 # Bots defined here are spawned automatically on server start.
 bots:
   - name: "Alex"

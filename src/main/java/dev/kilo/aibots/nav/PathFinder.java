@@ -104,8 +104,27 @@ public final class PathFinder {
         return !w.getBlockAt(x, y, z).getType().isSolid();
     }
 
-    private static double h(int x, int y, int z, int gx, int gy, int gz) {
-        double dx = gx - x, dy = (gy - y) * 1.5, dz = gz - z;
+    /**
+     * Cheap straight-line check before running A*: if the bot can walk a clear
+     * line to the goal (flat ground, no walls), skip the search entirely.
+     */
+    static List<BlockVector> tryDirect(World w, Location start, Location goal) {
+        double dx = goal.getX() - start.getX();
+        double dz = goal.getZ() - start.getZ();
+        double dist = Math.hypot(dx, dz);
+        if (dist < 0.5 || Math.abs(goal.getY() - start.getY()) > 1) return null;
+        int steps = (int) Math.ceil(dist * 2);
+        for (int i = 1; i <= steps; i++) {
+            double t = (double) i / steps;
+            int x = (int) Math.floor(start.getX() + dx * t);
+            int z = (int) Math.floor(start.getZ() + dz * t);
+            int y = start.getBlockY();
+            if (!walkable(w, x, y, z)) return null;
+        }
+        return List.of(new BlockVector(goal.getBlockX(), goal.getBlockY(), goal.getBlockZ()));
+    }
+
+    private static double h(int x, int y, int z, int gx, int gy, int gz) {        double dx = gx - x, dy = (gy - y) * 1.5, dz = gz - z;
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 

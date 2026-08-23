@@ -19,6 +19,8 @@ public final class BotChatListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onChat(AsyncChatEvent event) {
+        // zero-cost when no bots are online
+        if (plugin.botManager().all().isEmpty()) return;
         String plain = PlainTextComponentSerializer.plainText().serialize(event.message());
         if (plain.isBlank()) return;
         // hop to the main thread - bot logic is not thread-safe
