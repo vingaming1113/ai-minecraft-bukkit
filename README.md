@@ -75,7 +75,7 @@ Let me go check that out!
 ## Performance
 
 - Bots are real server-side entities, so they cost almost nothing to simulate.
-- **Optional ProtocolLib support**: when ProtocolLib is installed and `performance.hide-from-tab-list: true` (default), bots are removed from every client's tab list with a single `PLAYER_INFO_REMOVE` packet — including players who join later. Without ProtocolLib everything still works, just with vanilla tab-list behavior.
+- **ProtocolLib is a required dependency.** On enable, bots are removed from every client's tab list with a single `PLAYER_INFO_REMOVE` packet — including players who join later (`performance.hide-from-tab-list`, default `true`).
 - Idle bots skip movement simulation entirely (zero-cost ticks).
 - A cheap line-of-sight check short-circuits A* whenever the goal is reachable in a straight walkable line.
 - Chat handling is a no-op while no bots are online.
@@ -84,4 +84,4 @@ Let me go check that out!
 
 - Paper (or fork) for Minecraft **26.2**
 - Java **25**
-- ProtocolLib (optional, for tab-list hiding / packet optimizations)
+- **ProtocolLib** (required — the plugin disables itself without it)
