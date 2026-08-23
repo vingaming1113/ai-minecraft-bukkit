@@ -86,7 +86,7 @@ public final class AIBotCommand implements TabExecutor {
         }
         for (Bot b : all) {
             Location l = b.body().location();
-            sender.sendMessage(Component.text(b.name() + " - " + b.settings().gamemode().name().toLowerCase(Locale.ROOT())
+            sender.sendMessage(Component.text(b.name() + " - " + b.settings().gamemode().name().toLowerCase(Locale.ROOT)
                     + " at " + l.getBlockX() + " " + l.getBlockY() + " " + l.getBlockZ()
                     + (b.isBusy() ? " (walking)" : ""), NamedTextColor.YELLOW));
         }

@@ -88,7 +88,7 @@ public final class Bot {
         String text = PlainTextComponentSerializer.plainText().serialize(message);
         if (text.isBlank()) return;
 
-        boolean addressedByMe = isAddressed(message);
+        boolean addressedByMe = isAddressed(text);
         boolean senderIsBot = plugin.botManager().botByName(senderName) != null;
 
         if (!addressedByMe && plugin.mentionOnly()) return;

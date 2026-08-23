@@ -1,8 +1,8 @@
 package dev.kilo.aibots.nms;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
-import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.entity.Player;
 
 import java.lang.reflect.Constructor;
@@ -42,11 +42,13 @@ public final class FakePlayer {
     public static synchronized FakePlayer create(Location loc, String name) {
         if (failed) return null;
         try {
-            Class<?> craftServerClass = Class.forName("org.bukkit.craftbukkit.CraftServer");
-            Object mcServer = craftServerClass.getMethod("getServer").invoke(loc.getWorld().getServer());
+            // Bukkit.getServer() IS a CraftServer at runtime; get its NMS MinecraftServer
+            Object craftServer = Bukkit.getServer();
+            Class<?> craftServerClass = craftServer.getClass();
+            Object mcServer = craftServerClass.getMethod("getServer").invoke(craftServer);
 
             World bukkitWorld = loc.getWorld();
-            Object serverLevel = ((CraftWorld) bukkitWorld).getHandle();
+            Object serverLevel = bukkitWorld.getClass().getMethod("getHandle").invoke(bukkitWorld);
 
             Class<?> serverPlayerClass = Class.forName("net.minecraft.server.level.ServerPlayer");
             Class<?> clientInfoClass = Class.forName("net.minecraft.server.level.ClientInformation");
