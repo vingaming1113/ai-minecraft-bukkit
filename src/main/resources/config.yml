@@ -21,8 +21,6 @@ ai:
 behavior:
   # true = bots only reply when mentioned ("@BotName", "BotName," or a direct question to them)
   mention-only: false
-  # Bots hear and can react to chat within this radius (blocks)
-  hearing-range: 32
   # Delay range before a bot answers, keeps conversations natural
   reply-delay-min-ms: 800
   reply-delay-max-ms: 2500

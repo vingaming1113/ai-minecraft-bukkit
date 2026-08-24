@@ -14,7 +14,6 @@ public final class AIBotPlugin extends JavaPlugin {
     private PacketManager packetManager;
 
     private boolean mentionOnly;
-    private int hearingRange;
     private long replyDelayMinMs;
     private long replyDelayMaxMs;
     private int maxBotChain;
@@ -28,14 +27,14 @@ public final class AIBotPlugin extends JavaPlugin {
         loadSettings();
 
         this.llm = new LLMService(getConfig().getConfigurationSection("ai"));
+        this.botManager = new BotManager(this);
         this.packetManager = PacketManager.create(this,
-                () -> botManager.all().stream().map(b -> b.body().bukkit().getUniqueId()).toList());
+                () -> botManager.all().stream().map(b -> b.body().bukkit()).toList());
         if (packetManager == null) {
             getLogger().severe("Disabling AIBots - ProtocolLib is required.");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-        this.botManager = new BotManager(this);
 
         getServer().getPluginManager().registerEvents(new BotChatListener(this), this);
         getServer().getPluginManager().registerEvents(new BotLifeListener(this), this);
@@ -69,7 +68,6 @@ public final class AIBotPlugin extends JavaPlugin {
 
     private void loadSettings() {
         mentionOnly = getConfig().getBoolean("behavior.mention-only", false);
-        hearingRange = getConfig().getInt("behavior.hearing-range", 32);
         replyDelayMinMs = getConfig().getLong("behavior.reply-delay-min-ms", 800);
         replyDelayMaxMs = getConfig().getLong("behavior.reply-delay-max-ms", 2500);
         maxBotChain = getConfig().getInt("behavior.max-bot-chain", 3);
@@ -102,9 +100,6 @@ public final class AIBotPlugin extends JavaPlugin {
         return mentionOnly;
     }
 
-    public int hearingRange() {
-        return hearingRange;
-    }
 
     public long replyDelayMinMs() {
         return replyDelayMinMs;

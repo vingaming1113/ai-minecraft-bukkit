@@ -94,12 +94,8 @@ public final class Bot {
 
     // ---------- chat ----------
 
-    /** Called for every chat line the bot can hear. */
+    /** Called for every chat line the bot can hear - Minecraft chat is global. */
     void hear(Player speaker, Component message) {
-        int range = plugin.hearingRange();
-        if (range > 0 && !speaker.getWorld().equals(body.bukkit().getWorld())) return;
-        if (range > 0 && speaker.getLocation().distance(body.location()) > range) return;
-
         String senderName = speaker.getName();
         String text = PlainTextComponentSerializer.plainText().serialize(message);
         if (text.isBlank()) return;

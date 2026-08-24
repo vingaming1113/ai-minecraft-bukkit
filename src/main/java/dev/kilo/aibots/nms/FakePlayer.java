@@ -133,12 +133,69 @@ public final class FakePlayer {
             bukkit.setRemoveWhenFarAway(false);
             bukkit.setPersistent(false);
 
+            // register in the server's PlayerList so the bot counts as an online
+            // player everywhere: selectors (@p), command tab-completion, /list
+            registerInPlayerList(sp, mcServer, bukkit);
+
             return new FakePlayer(sp, move, moverSelf, vec3, bukkit);
         } catch (ReflectiveOperationException | RuntimeException e) {
             failed = true;
             getLoggerStatic(e);
             return null;
         }
+    }
+
+    /**
+     * Adds the bot to PlayerList#players / playersByName / playersByUUID.
+     * Without this the bot is invisible to Bukkit.getOnlinePlayers(), so vanilla
+     * selectors (@p), command tab-completion and /list never see it.
+     */
+    private static void registerInPlayerList(Object sp, Object mcServer, Player bukkit) {
+        try {
+            Object list = mcServer.getClass().getMethod("getPlayerList").invoke(mcServer);
+            Field players = findField(list.getClass(), java.util.List.class, "players");
+            if (players != null) {
+                @SuppressWarnings("unchecked")
+                java.util.Collection<Object> c = (java.util.Collection<Object>) players.get(list);
+                c.add(sp);
+            }
+            String name = bukkit.getName();
+            java.util.UUID id = bukkit.getUniqueId();
+            Field byName = findField(list.getClass(), java.util.Map.class, "playersByName");
+            if (byName != null) {
+                @SuppressWarnings("unchecked")
+                java.util.Map<Object, Object> m = (java.util.Map<Object, Object>) byName.get(list);
+                m.put(name, sp);
+            }
+            Field byUuid = findField(list.getClass(), java.util.Map.class, "playersByUUID");
+            if (byUuid != null) {
+                @SuppressWarnings("unchecked")
+                java.util.Map<Object, Object> m = (java.util.Map<Object, Object>) byUuid.get(list);
+                m.put(id, sp);
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            org.bukkit.Bukkit.getLogger().warning("[AIBots] Could not register bot in player list: " + e);
+        }
+    }
+
+    private static Field findField(Class<?> clazz, Class<?> type, String preferredName) {
+        for (Class<?> k = clazz; k != null; k = k.getSuperclass()) {
+            for (Field f : k.getDeclaredFields()) {
+                if (f.getType() == type && preferredName.equals(f.getName())) {
+                    f.setAccessible(true);
+                    return f;
+                }
+            }
+        }
+        for (Class<?> k = clazz; k != null; k = k.getSuperclass()) {
+            for (Field f : k.getDeclaredFields()) {
+                if (f.getType() == type) {
+                    f.setAccessible(true);
+                    return f;
+                }
+            }
+        }
+        return null;
     }
 
     private static void getLoggerStatic(Exception e) {

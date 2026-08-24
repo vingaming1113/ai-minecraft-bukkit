@@ -92,6 +92,10 @@ public final class BotManager {
         }
 
         bots.put(name.toLowerCase(Locale.ROOT), bot);
+
+        // vanilla never announced the bot (we bypass placeNewPlayer) - do it ourselves:
+        // ADD_PLAYER info packet with skin to every viewer + entity render refresh
+        plugin.packets().announceBot(bot.body().bukkit());
         return bot;
     }
 
