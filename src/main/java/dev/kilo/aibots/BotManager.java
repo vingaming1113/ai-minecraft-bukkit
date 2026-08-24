@@ -204,32 +204,62 @@ public final class BotManager {
     }
 
     /**
+     * Definitions read from bots.yml, kept so save() can never lose a bot that is
+     * only temporarily absent from runtime (death->respawn gap, failed spawn,
+     * crash during skin resolution). Purged only by an explicit /aibot remove.
+     */
+    private final List<Map<String, Object>> preservedDefs = new ArrayList<>();
+
+    private static String keyOf(Map<String, Object> def) {
+        Object n = def.get("name");
+        return n == null ? null : sanitizeBotName(String.valueOf(n)).toLowerCase(Locale.ROOT);
+    }
+
+    /**
      * bots.yml is the single source of truth: it ships as a default resource,
      * is edited by admins, and runtime state (position/inventory) is saved back
-     * into the exact same format - so there is never a second config to juggle.
+     * into the exact same format. Saving is LOSS-PROOF: definitions from the
+     * file always survive unless explicitly removed with /aibot remove.
      */
     public void save() {
-        YamlConfiguration yml = new YamlConfiguration();
-        int i = 0;
+        List<Map<String, Object>> out = new ArrayList<>();
+        java.util.Set<String> written = new java.util.HashSet<>();
+
         for (Bot b : bots.values()) {
-            String base = "bots." + i++ + ".";
+            Map<String, Object> e = new LinkedHashMap<>();
             Location loc = b.body().location();
-            yml.set(base + "name", b.name());
-            yml.set(base + "world", loc.getWorld().getName());
-            yml.set(base + "x", loc.getX());
-            yml.set(base + "y", loc.getY());
-            yml.set(base + "z", loc.getZ());
-            yml.set(base + "yaw", loc.getYaw());
-            yml.set(base + "pitch", loc.getPitch());
-            yml.set(base + "persona", b.settings().persona());
-            yml.set(base + "gamemode", b.settings().gamemode().name());
-            yml.set(base + "allowCommands", b.settings().allowCommands());
-            yml.set(base + "skin", b.skinInput());
-            if (b.settings().model() != null) yml.set(base + "model", b.settings().model());
+            e.put("name", b.name());
+            e.put("world", loc.getWorld().getName());
+            e.put("x", loc.getX());
+            e.put("y", loc.getY());
+            e.put("z", loc.getZ());
+            e.put("yaw", (double) loc.getYaw());
+            e.put("pitch", (double) loc.getPitch());
+            e.put("persona", b.settings().persona());
+            e.put("gamemode", b.settings().gamemode().name());
+            e.put("allowCommands", b.settings().allowCommands());
+            if (b.skinInput() != null) e.put("skin", b.skinInput());
+            if (b.settings().model() != null && !b.settings().model().isBlank()) {
+                e.put("model", b.settings().model());
+            }
             List<String> inv = new ArrayList<>();
             b.inventoryMap().forEach((m, n) -> inv.add(m.name() + ":" + n));
-            yml.set(base + "inventory", inv);
+            if (!inv.isEmpty()) e.put("inventory", inv);
+            out.add(e);
+            String k = b.name().toLowerCase(Locale.ROOT);
+            written.add(k);
         }
+
+        // never drop a defined bot just because it isn't alive right now
+        for (Map<String, Object> preserved : preservedDefs) {
+            String k = keyOf(preserved);
+            if (k != null && written.add(k)) {
+                out.add(preserved);
+            }
+        }
+
+        YamlConfiguration yml = new YamlConfiguration();
+        yml.set("bots", out.isEmpty ? null : out);
         try {
             plugin.getDataFolder().mkdirs();
             yml.save(botsFile());
@@ -241,55 +271,62 @@ public final class BotManager {
     /** Spawns every bot defined in bots.yml at its saved position (or world spawn). */
     public void loadAll() {
         List<BotDef> defs = new ArrayList<>();
+        preservedDefs.clear();
 
         if (!botsFile().exists()) {
             plugin.getLogger().warning("No bots.yml found - no bots to spawn. Create one or use /aibot spawn.");
             return;
         }
         YamlConfiguration yml = YamlConfiguration.loadConfiguration(botsFile());
-        ConfigurationSection sec = yml.getConfigurationSection("bots");
-        if (sec == null || sec.getKeys(false).isEmpty()) {
-            plugin.getLogger().info("bots.yml defines no bots.");
-            return;
-        }
-        for (String key : sec.getKeys(false)) {
-            ConfigurationSection s = sec.getConfigurationSection(key);
-            if (s == null) continue;
-            World world = Bukkit.getWorld(s.getString("world", Bukkit.getWorlds().get(0).getName()));
+        for (Map<?, ?> raw : yml.getMapList("bots")) {
+            Map<String, Object> s = castMap(raw);
+            String entryName = sanitizeBotName(String.valueOf(s.getOrDefault("name", "")));
+            if (entryName == null) {
+                plugin.getLogger().warning("bots.yml entry has an invalid name - skipped");
+                continue;
+            }
+            String rawName = String.valueOf(s.getOrDefault("name", ""));
+            if (!entryName.equals(rawName)) {
+                plugin.getLogger().warning("Bot name '" + rawName + "' is invalid (max 16 chars, "
+                        + "[A-Za-z0-9_] only) - using '" + entryName + "'");
+            }
+            World world = Bukkit.getWorld(String.valueOf(s.getOrDefault("world", Bukkit.getWorlds().get(0).getName())));
             if (world == null) world = Bukkit.getWorlds().get(0);
             Location loc;
-            if (s.contains("x")) {
+            if (s.containsKey("x")) {
                 loc = new Location(world,
-                        s.getDouble("x"), s.getDouble("y"), s.getDouble("z"),
-                        (float) s.getDouble("yaw"), (float) s.getDouble("pitch"));
+                        asDouble(s.get("x")), asDouble(s.get("y")), asDouble(s.get("z")),
+                        (float) asDouble(s.getOrDefault("yaw", 0.0)), (float) asDouble(s.getOrDefault("pitch", 0.0)));
             } else {
                 loc = world.getSpawnLocation(); // brand-new bot from a hand-written entry
             }
-            GameMode gm = parseGamemode(s.getString("gamemode"));
+            GameMode gm = parseGamemode(String.valueOf(s.getOrDefault("gamemode", "survival")));
             Bot.Settings st = new Bot.Settings(
-                    s.getString("persona", plugin.defaultPersona()), gm, s.getBoolean("allowCommands"),
-                    s.getString("model"));
+                    String.valueOf(s.getOrDefault("persona", plugin.defaultPersona())),
+                    gm,
+                    Boolean.parseBoolean(String.valueOf(s.getOrDefault("allowCommands", "false"))),
+                    s.get("model") != null && !String.valueOf(s.get("model")).isBlank()
+                            ? String.valueOf(s.get("model")) : null);
             Map<Material, Integer> inv = new LinkedHashMap<>();
-            for (String entry : s.getStringList("inventory")) {
-                String[] split = entry.split(":");
-                Material m = Material.matchMaterial(split[0]);
-                if (m != null && split.length > 1) {
-                    try {
-                        inv.put(m, Integer.parseInt(split[1]));
-                    } catch (NumberFormatException ignored) {
+            if (s.get("inventory") instanceof List<?> list) {
+                for (Object o : list) {
+                    String[] split = String.valueOf(o).split(":");
+                    Material m = Material.matchMaterial(split[0]);
+                    if (m != null && split.length > 1) {
+                        try {
+                            inv.put(m, Integer.parseInt(split[1]));
+                        } catch (NumberFormatException ignored) {
+                        }
                     }
                 }
             }
-            String entryName = sanitizeBotName(s.getString("name", "Bot" + key));
-            if (entryName == null) {
-                plugin.getLogger().warning("bots.yml entry " + key + " has an invalid name - skipped");
-                continue;
-            }
-            if (!entryName.equals(s.getString("name"))) {
-                plugin.getLogger().warning("Bot name '" + s.getString("name") + "' is invalid (max 16 chars, "
-                        + "[A-Za-z0-9_] only) - using '" + entryName + "'");
-            }
-            defs.add(new BotDef(entryName, loc, st, inv, s.getString("skin")));
+            String skin = s.get("skin") != null && !String.valueOf(s.get("skin")).isBlank()
+                    ? String.valueOf(s.get("skin")) : null;
+            defs.add(new BotDef(entryName, loc, st, inv, skin));
+            // snapshot exactly what the file says, so saves can never lose it
+            Map<String, Object> copy = new LinkedHashMap<>(castMap(raw));
+            copy.put("name", entryName);
+            preservedDefs.add(copy);
         }
 
         // resolve skins off-thread, then spawn everything on the main thread
@@ -304,10 +341,30 @@ public final class BotManager {
                     if (bot != null) {
                         bot.setSkinInput(p.def().skinInput());
                         p.def().inventory().forEach((m, n) -> bot.giveItem(new org.bukkit.inventory.ItemStack(m, n)));
+                    } else {
+                        plugin.getLogger().warning("[AIBots] Could not spawn '" + p.def().name()
+                                + "' - definition kept in bots.yml and will retry on next restart/reload.");
                     }
                 }
             });
         });
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> castMap(Object o) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (o instanceof Map<?, ?> m) {
+            m.forEach((k, v) -> out.put(String.valueOf(k), v));
+        }
+        return out;
+    }
+
+    private static double asDouble(Object o) {
+        try {
+            return Double.parseDouble(String.valueOf(o));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private record BotDef(String name, Location loc, Bot.Settings settings, Map<Material, Integer> inventory,
