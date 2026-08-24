@@ -105,6 +105,7 @@ public final class Bot {
         String senderName = speaker.getName();
         String text = PlainTextComponentSerializer.plainText().serialize(message);
         if (text.isBlank()) return;
+        if (text.length() > 240) text = text.substring(0, 240);
 
         boolean addressedByMe = isAddressed(text);
         boolean senderIsBot = plugin.botManager().botByName(senderName) != null;
@@ -137,15 +138,16 @@ public final class Bot {
     }
 
     private boolean isAddressed(String message) {
-        String lower = message.toLowerCase(Locale.ROOT);
-        String me = name.toLowerCase(Locale.ROOT);
-        return lower.contains("@" + me) || lower.startsWith(me) || lower.contains(me + ",")
-                || lower.contains(me + ":") || lower.equals(me);
+        // whole-word match anywhere in the sentence, so "@Alex", "alex," and
+        // "ask alex or steve" all work - every mentioned bot may answer at once
+        String me = java.util.regex.Pattern.quote(name.toLowerCase(Locale.ROOT));
+        return java.util.regex.Pattern.compile("(^|\\W)" + me + "\\b")
+                .matcher(message.toLowerCase(Locale.ROOT)).find();
     }
 
     private synchronized void remember(String role, String content) {
         memory.addLast(new String[]{role, content});
-        while (memory.size() > 16) memory.removeFirst();
+        while (memory.size() > 12) memory.removeFirst();
     }
 
     /**
@@ -178,6 +180,14 @@ public final class Bot {
                     }
                     handleReply(reply == null ? "" : reply);
                 }));
+    }
+
+    /** Stores the bot's own reply as an assistant turn so history reads correctly. */
+    private void rememberOwnReply(String reply) {
+        String clean = reply.replace("(my thoughts got cut off - AI error)", "").trim();
+        if (clean.isBlank()) return;
+        if (clean.length() > 280) clean = clean.substring(0, 280);
+        remember("assistant", clean);
     }
 
     /**
@@ -248,6 +258,7 @@ public final class Bot {
                 - To seek civilization, ask another player in chat if you can come to them; if they agree, walk (!goto) to them.
                 - Use actions instead of claiming you did something; be honest about what you carry.
                 - Keep each spoken line under ~15 words, casual gamer tone.
+                - Older messages are just context: never repeat things you already said, and only respond to the NEWEST message.
                 """);
         return sb.toString();
     }
@@ -266,7 +277,10 @@ public final class Bot {
                 speech.append(line.replaceFirst("^" + java.util.regex.Pattern.quote(name + ":"), "").trim());
             }
         }
-        if (!speech.isEmpty()) speak(speech.toString());
+        if (!speech.isEmpty()) {
+            speak(speech.toString());
+            rememberOwnReply(speech.toString());
+        }
     }
 
     /** Broadcasts a chat message that looks like a normal player speaking. */

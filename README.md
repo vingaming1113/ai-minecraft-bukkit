@@ -26,24 +26,30 @@ GitHub Actions builds every commit automatically (`.github/workflows/build.yml`)
 
 ## Setup
 
-1. Drop `AIBots-1.0.1.jar` into `plugins/`.
-2. Edit `plugins/AIBots/config.yml`:
+1. Drop `AIBots.jar` and ProtocolLib into `plugins/`.
+2. **`plugins/AIBots/bots.yml`** is the single file that defines your bots (it is created with an example on first start):
+
+```yaml
+bots:
+  - name: "Alex"                # username shown in chat & tab
+    persona: "You are Alex, a cheerful builder."
+    gamemode: survival          # survival | creative
+    allow-commands: false       # when true the AI may also !tp and run server commands
+    skin: "Notch"               # premium Minecraft username for the bot's skin (optional)
+    model: ""                   # optional per-bot model override (empty = global)
+```
+
+3. Edit `plugins/AIBots/config.yml` for the AI provider:
 
 ```yaml
 ai:
   provider: openrouter          # openrouter|openai|groq|deepseek|mistral|xai|together|ollama|lmstudio|custom
   api-key: "sk-or-v1-..."
-  model: "openai/gpt-4o-mini"
-
-bots:
-  - name: "Alex"                # username shown in chat & nametag
-    persona: "You are Alex, a cheerful builder."
-    gamemode: survival          # survival | creative
-    allow-commands: false       # when true the AI may also !tp and run server commands
-    skin: "Notch"               # premium Minecraft username for the bot's skin (optional)
+  model: "openai/gpt-4o-mini"   # global model; per-bot overrides live in bots.yml
+  reasoning-effort: medium      # off | low | medium | high
 ```
 
-3. Restart. Bots spawn at the world spawn (or their saved position).
+4. Restart. Bots defined in `bots.yml` spawn at their saved position (or world spawn). Everything the runtime changes (position, inventory, new bots from `/aibot spawn`) is saved back into the **same file** — there is no second bot config.
 
 ## Commands
 
