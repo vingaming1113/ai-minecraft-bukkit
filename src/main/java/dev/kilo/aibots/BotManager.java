@@ -122,6 +122,9 @@ public final class BotManager {
     public boolean remove(String name) {
         Bot bot = bots.remove(name.toLowerCase(Locale.ROOT));
         if (bot == null) return false;
+        // an explicitly removed bot must not be resurrected from the file snapshot
+        String k = name.toLowerCase(Locale.ROOT);
+        preservedDefs.removeIf(def -> k.equals(keyOf(def)));
         bot.discard();
         // clean the ghost tab entry left behind by a despawned fake player
         plugin.packets().hideFromTabList(bot.body().bukkit().getUniqueId());
@@ -259,7 +262,7 @@ public final class BotManager {
         }
 
         YamlConfiguration yml = new YamlConfiguration();
-        yml.set("bots", out.isEmpty ? null : out);
+        yml.set("bots", out.isEmpty() ? null : out);
         try {
             plugin.getDataFolder().mkdirs();
             yml.save(botsFile());
@@ -380,15 +383,6 @@ public final class BotManager {
         } catch (IllegalArgumentException e) {
             return GameMode.SURVIVAL;
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> castMap(Object o) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        if (o instanceof Map<?, ?> m) {
-            m.forEach((k, v) -> out.put(String.valueOf(k), v));
-        }
-        return out;
     }
 
     public Player nearestPlayer(Location loc, double maxRange) {

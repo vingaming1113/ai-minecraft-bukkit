@@ -14,8 +14,9 @@ ai:
   # Only needed when provider is 'custom' or you want to override the preset.
   base-url: ""
   temperature: 0.7
-  # Reasoning/thinking effort for reasoning-capable models (off = not sent).
-  reasoning-effort: medium    # off | low | medium | high
+  # Reasoning/thinking effort for reasoning-capable models.
+  # off = never sent (safest - some models reject it entirely).
+  reasoning-effort: off    # off | low | medium | high
   request-timeout-seconds: 30
 
 # Global behaviour

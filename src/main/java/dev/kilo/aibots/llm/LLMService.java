@@ -3,6 +3,7 @@ package dev.kilo.aibots.llm;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.jetbrains.annotations.NotNull;
 
@@ -80,12 +81,20 @@ public final class LLMService {
 
     /** modelOverride: per-bot model, falls back to the global one when null/blank. */
     public CompletableFuture<String> chat(@NotNull List<Message> messages, String modelOverride) {
+        String mdl = modelOverride != null && !modelOverride.isBlank() ? modelOverride.trim() : model;
+        CompletableFuture<String> future = new CompletableFuture<>();
+        // first try honors reasoning effort; if the provider rejects it we
+        // automatically fall back to a plain request (some models 400 on it)
+        attempt(messages, mdl, reasoningEffort != null && REASONING_PROVIDERS.contains(provider), 2, future);
+        return future;
+    }
+
+    private HttpRequest buildRequest(List<Message> messages, String mdl, boolean useReasoning) {
         JsonObject body = new JsonObject();
-        body.addProperty("model",
-                modelOverride != null && !modelOverride.isBlank() ? modelOverride.trim() : model);
+        body.addProperty("model", mdl);
         body.addProperty("temperature", temperature);
 
-        if (reasoningEffort != null && REASONING_PROVIDERS.contains(provider)) {
+        if (useReasoning) {
             body.addProperty("reasoning_effort", reasoningEffort);
             if ("openrouter".equals(provider)) {
                 JsonObject reasoning = new JsonObject();
@@ -103,32 +112,42 @@ public final class LLMService {
         }
         body.add("messages", arr);
 
-        HttpRequest request = HttpRequest.newBuilder()
+        return HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + "/chat/completions"))
                 .timeout(Duration.ofSeconds(timeoutSeconds))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(body)))
                 .header("Authorization", "Bearer " + (apiKey == null ? "" : apiKey))
                 .build();
-
-        CompletableFuture<String> future = new CompletableFuture<>();
-        attempt(request, 2, future);
-        return future;
     }
 
-    private void attempt(HttpRequest request, int triesLeft, CompletableFuture<String> future) {
+    private void attempt(List<Message> messages, String mdl, boolean useReasoning,
+                         int triesLeft, CompletableFuture<String> future) {
+        HttpRequest request = buildRequest(messages, mdl, useReasoning);
         http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .orTimeout(timeoutSeconds + 5L, TimeUnit.SECONDS)
                 .whenComplete((resp, err) -> {
                     if (err != null) {
-                        retryOrFail(request, triesLeft, future, new RuntimeException(err.getMessage()));
+                        retryOrFail(messages, mdl, useReasoning, triesLeft, future,
+                                new RuntimeException(err.getMessage()));
                         return;
                     }
                     if (resp.statusCode() / 100 != 2) {
+                        String snippet = truncate(resp.body()).toLowerCase();
+
+                        // provider rejected reasoning params - retry without them
+                        if (resp.statusCode() == 400 && useReasoning
+                                && (snippet.contains("reason") || snippet.contains("effort"))) {
+                            Bukkit.getLogger().info("[AIBots] Provider rejected reasoning effort - "
+                                    + "retrying without it.");
+                            attempt(messages, mdl, false, triesLeft, future);
+                            return;
+                        }
+
                         RuntimeException e = new RuntimeException(
                                 "AI request failed (" + resp.statusCode() + "): " + truncate(resp.body()));
                         if (resp.statusCode() >= 500 || resp.statusCode() == 408 || resp.statusCode() == 429) {
-                            retryOrFail(request, triesLeft, future, e);
+                            retryOrFail(messages, mdl, useReasoning, triesLeft, future, e);
                         } else {
                             future.completeExceptionally(e);
                         }
@@ -141,7 +160,7 @@ public final class LLMService {
                         }
                         future.complete(content.trim());
                     } catch (RuntimeException e) {
-                        retryOrFail(request, triesLeft, future,
+                        retryOrFail(messages, mdl, useReasoning, triesLeft, future,
                                 new RuntimeException("Unexpected AI response: " + truncate(resp.body())));
                     }
                 });
@@ -167,10 +186,11 @@ public final class LLMService {
         return null;
     }
 
-    private void retryOrFail(HttpRequest request, int triesLeft, CompletableFuture<String> future, RuntimeException error) {
+    private void retryOrFail(List<Message> messages, String mdl, boolean useReasoning,
+                             int triesLeft, CompletableFuture<String> future, RuntimeException error) {
         if (triesLeft > 1) {
             CompletableFuture.delayedExecutor(1500, TimeUnit.MILLISECONDS)
-                    .execute(() -> attempt(request, triesLeft - 1, future));
+                    .execute(() -> attempt(messages, mdl, useReasoning, triesLeft - 1, future));
         } else {
             future.completeExceptionally(error);
         }
