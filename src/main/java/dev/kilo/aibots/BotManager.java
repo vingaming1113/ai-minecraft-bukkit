@@ -93,6 +93,14 @@ public final class BotManager {
 
         bots.put(name.toLowerCase(Locale.ROOT), bot);
 
+        // some server builds ignore pre-add positioning for players - enforce it
+        Location actual = bot.body().location();
+        if (!actual.getWorld().equals(safe.getWorld())
+                || Math.abs(actual.getX() - safe.getX()) > 2 || Math.abs(actual.getZ() - safe.getZ()) > 2
+                || actual.getY() < w.getMinHeight() + 1) {
+            bot.teleport(safe);
+        }
+
         // vanilla never announced the bot (we bypass placeNewPlayer) - do it ourselves:
         // ADD_PLAYER info packet with skin to every viewer + entity render refresh
         plugin.packets().announceBot(bot.body().bukkit());
@@ -117,7 +125,13 @@ public final class BotManager {
     /** Starts the per-tick movement driver - this is what makes bodies walk. */
     public void startTicker() {
         stopTicker();
+        long[] autosaveCounter = {0};
         tickTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            // periodic autosave so positions survive crashes, not just clean stops
+            if (++autosaveCounter[0] >= 6000) { // ~5 minutes
+                autosaveCounter[0] = 0;
+                save();
+            }
             for (Bot b : bots.values()) {
                 try {
                     Player body = b.body().bukkit();
@@ -170,6 +184,7 @@ public final class BotManager {
             yml.set(base + "gamemode", b.settings().gamemode().name());
             yml.set(base + "allowCommands", b.settings().allowCommands());
             yml.set(base + "skin", b.skinInput());
+            if (b.settings().model() != null) yml.set(base + "model", b.settings().model());
             List<String> inv = new ArrayList<>();
             b.inventoryMap().forEach((m, n) -> inv.add(m.name() + ":" + n));
             yml.set(base + "inventory", inv);
@@ -206,7 +221,8 @@ public final class BotManager {
                             (float) s.getDouble("yaw"), (float) s.getDouble("pitch"));
                     GameMode gm = parseGamemode(s.getString("gamemode"));
                     Bot.Settings st = new Bot.Settings(
-                            s.getString("persona", plugin.defaultPersona()), gm, s.getBoolean("allowCommands"));
+                            s.getString("persona", plugin.defaultPersona()), gm, s.getBoolean("allowCommands"),
+                            s.getString("model"));
                     Map<Material, Integer> inv = new LinkedHashMap<>();
                     for (String entry : s.getStringList("inventory")) {
                         String[] split = entry.split(":");
@@ -227,15 +243,15 @@ public final class BotManager {
             World world = Bukkit.getWorlds().get(0);
             for (Map<?, ?> raw : plugin.getConfig().getMapList("bots")) {
                 Map<String, Object> def = castMap(raw);
-                GameMode gm = Boolean.parseBoolean(String.valueOf(def.getOrDefault("creative", def.getOrDefault("gamemode", "survival"))))
-                        ? GameMode.CREATIVE : parseGamemode(String.valueOf(def.getOrDefault("gamemode", "survival")).toUpperCase(Locale.ROOT));
+                GameMode gm = parseGamemode(String.valueOf(def.getOrDefault("gamemode", "survival")).toUpperCase(Locale.ROOT));
                 defs.add(new BotDef(
                         String.valueOf(def.getOrDefault("name", "Alex")),
                         world.getSpawnLocation(),
                         new Bot.Settings(
                                 String.valueOf(def.getOrDefault("persona", plugin.defaultPersona())),
-                                parseGamemode(String.valueOf(def.getOrDefault("gamemode", "survival")).toUpperCase(Locale.ROOT)),
-                                Boolean.parseBoolean(String.valueOf(def.getOrDefault("allowCommands", "false")))),
+                                gm,
+                                Boolean.parseBoolean(String.valueOf(def.getOrDefault("allowCommands", "false"))),
+                                def.get("model") != null ? String.valueOf(def.get("model")) : null),
                         Map.of(),
                         def.get("skin") != null ? String.valueOf(def.get("skin")) : null));
             }

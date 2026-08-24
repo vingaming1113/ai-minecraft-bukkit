@@ -51,6 +51,7 @@ public final class AIBotCommand implements TabExecutor {
         GameMode gm = plugin.defaultGamemode();
         boolean allowCmds = plugin.defaultAllowCommands();
         String skinInput = null;
+        String model = null;
         StringBuilder persona = new StringBuilder(plugin.defaultPersona());
         for (int i = 2; i < args.length; i++) {
             if (args[i].toLowerCase(Locale.ROOT).startsWith("gamemode:")) {
@@ -63,6 +64,8 @@ public final class AIBotCommand implements TabExecutor {
                 allowCmds = Boolean.parseBoolean(args[i].substring(9));
             } else if (args[i].toLowerCase(Locale.ROOT).startsWith("skin:")) {
                 skinInput = args[i].substring(5);
+            } else if (args[i].toLowerCase(Locale.ROOT).startsWith("model:")) {
+                model = args[i].substring(6);
             } else {
                 if (persona.length() > 0) persona.append(' ');
                 persona.append(args[i]);

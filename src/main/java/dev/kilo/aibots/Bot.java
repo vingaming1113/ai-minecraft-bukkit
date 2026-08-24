@@ -25,7 +25,11 @@ import java.util.concurrent.ThreadLocalRandom;
 /** One AI bot: a fake-player body + LLM brain + virtual inventory. */
 public final class Bot {
 
-    public record Settings(String persona, GameMode gamemode, boolean allowCommands) {
+    public record Settings(String persona, GameMode gamemode, boolean allowCommands, String model) {
+
+        public Settings(String persona, GameMode gamemode, boolean allowCommands) {
+            this(persona, gamemode, allowCommands, null);
+        }
     }
 
     private final String name;
@@ -164,7 +168,7 @@ public final class Bot {
                 : "You are " + name + ". Reply now: chat lines and/or '!' action lines.";
         messages.add(new LLMService.Message("user", closing));
 
-        plugin.llm().chat(messages).whenComplete((reply, err) ->
+        plugin.llm().chat(messages, settings.model()).whenComplete((reply, err) ->
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     thinking = false;
                     if (err != null) {

@@ -75,8 +75,14 @@ public final class LLMService {
     }
 
     public CompletableFuture<String> chat(@NotNull List<Message> messages) {
+        return chat(messages, null);
+    }
+
+    /** modelOverride: per-bot model, falls back to the global one when null/blank. */
+    public CompletableFuture<String> chat(@NotNull List<Message> messages, String modelOverride) {
         JsonObject body = new JsonObject();
-        body.addProperty("model", model);
+        body.addProperty("model",
+                modelOverride != null && !modelOverride.isBlank() ? modelOverride.trim() : model);
         body.addProperty("temperature", temperature);
 
         if (reasoningEffort != null && REASONING_PROVIDERS.contains(provider)) {
