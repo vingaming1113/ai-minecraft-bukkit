@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Player;
@@ -32,7 +33,8 @@ final class Actions {
             case "follow" -> followAction(parts);
             case "stop" -> bot.walker().stop();
             case "craft" -> craft(parts.length > 1 ? parts[1] : "", parts.length > 2 ? num(parts[2]) : 1);
-            case "mine", "break" -> mine();
+            case "mine", "break" -> breakAction(parts);
+            case "build" -> build();
             case "place" -> place(parts.length > 1 ? parts[1] : "");
             case "give" -> give(parts);
             case "drop" -> drop(parts.length > 1 ? parts[1] : "", parts.length > 2 ? num(parts[2]) : 1);
@@ -108,23 +110,6 @@ final class Actions {
                 : ("I can't craft " + pretty(result) + " with what I'm carrying: " + bot.inventorySummary()));
     }
 
-    private void mine() {
-        Block target = bot.body().bukkit().getTargetBlockExact(5);
-        if (target == null || target.getType().isAir()) {
-            bot.speak("There's nothing in reach to mine.");
-            return;
-        }
-        bot.swingBodyHand();
-        boolean survival = bot.settings().gamemode() == GameMode.SURVIVAL;
-        if (survival) {
-            for (ItemStack drop : target.getDrops()) {
-                bot.giveItem(drop);
-            }
-        }
-        target.setType(Material.AIR);
-        bot.speak("Mined the " + pretty(target.getType()) + (survival ? ", pocketed it." : "."));
-    }
-
     private void place(String materialName) {
         BlockFace face = bot.body().bukkit().getTargetBlockFace(5);
         Block against = bot.body().bukkit().getTargetBlockExact(5);
@@ -153,6 +138,97 @@ final class Actions {
         faceBlock.setType(mat);
         if (bot.settings().gamemode() != GameMode.CREATIVE) bot.removeItem(mat, 1);
         bot.speak("Placed " + pretty(mat) + ".");
+    }
+
+    /**
+     * Generic block breaking, like a real player: !break oak_log 4 breaks any
+     * matching blocks within reach and pockets the drops. No material = mine
+     * whatever the bot is looking at.
+     */
+    private void breakAction(String[] parts) {
+        boolean survival = bot.settings().gamemode() == GameMode.SURVIVAL;
+        if (parts.length < 2) {
+            Block target = bot.body().bukkit().getTargetBlockExact(5);
+            if (target == null || target.getType().isAir()) {
+                bot.speak("There's nothing in reach to break.");
+                return;
+            }
+            bot.swingBodyHand();
+            if (survival) {
+                for (ItemStack drop : target.getDrops()) bot.giveItem(drop);
+            }
+            Material was = target.getType();
+            target.setType(Material.AIR);
+            bot.speak("Broke the " + pretty(was) + ".");
+            return;
+        }
+
+        Material wanted = matchLoose(parts[1]);
+        int max = Math.min(16, parts.length > 2 ? num(parts[2]) : 1);
+        if (wanted == null) {
+            bot.speak("I don't know what a " + parts[1] + " is.");
+            return;
+        }
+        Location base = bot.body().location();
+        World w = base.getWorld();
+        int broken = 0;
+        outer:
+        for (int dy = -1; dy <= 3; dy++) {
+            for (int dx = -4; dx <= 4; dx++) {
+                for (int dz = -4; dz <= 4; dz++) {
+                    Block b = w.getBlockAt(base.getBlockX() + dx, base.getBlockY() + dy, base.getBlockZ() + dz);
+                    if (b.getType() != wanted) continue;
+                    bot.swingBodyHand();
+                    if (survival) {
+                        for (ItemStack drop : b.getDrops()) bot.giveItem(drop);
+                    }
+                    b.setType(Material.AIR);
+                    if (++broken >= max) break outer;
+                }
+            }
+        }
+        if (broken == 0) {
+            bot.speak("No " + pretty(wanted) + " within reach - I'd have to walk closer.");
+        } else {
+            bot.speak("Broke " + broken + "x " + pretty(wanted) + ". Inventory: " + bot.inventorySummary());
+        }
+    }
+
+    /** Builds a tiny shelter ring out of whatever blocks the bot carries. */
+    private void build() {
+        Location feet = bot.body().location();
+        World w = feet.getWorld();
+        int[][] ring = {{2, 0}, {-2, 0}, {0, 2}, {0, -2},
+                {2, 1}, {2, -1}, {-2, 1}, {-2, -1},
+                {1, 2}, {1, -2}, {-1, 2}, {-1, -2}};
+        boolean survival = bot.settings().gamemode() == GameMode.SURVIVAL;
+        int placed = 0;
+        for (int[] off : ring) {
+            for (int dy = 0; dy < 2 && placed < 14; dy++) {
+                Block spot = w.getBlockAt(feet.getBlockX() + off[0], feet.getBlockY() + dy, feet.getBlockZ() + off[1]);
+                Block ground = spot.getRelative(org.bukkit.block.BlockFace.DOWN);
+                if (!spot.getType().isAir() || !ground.getType().isSolid()) continue;
+                Material m = bot.firstPlaceable();
+                if (m == null) break;
+                bot.swingBodyHand();
+                spot.setType(m);
+                if (survival) bot.removeItem(m, 1);
+                placed++;
+            }
+        }
+        if (placed == 0) bot.speak("I can't build here - no space or nothing to build with.");
+        else bot.speak("Built a little shelter (" + placed + " blocks). Inventory: " + bot.inventorySummary());
+    }
+
+    /** Loose name matching: "log" matches OAK_LOG/SPRUCE_LOG/etc. */
+    private Material matchLoose(String token) {
+        Material m = Material.matchMaterial(token);
+        if (m != null) return m;
+        String t = token.toUpperCase(Locale.ROOT);
+        for (Material mat : Material.values()) {
+            if (mat.isBlock() && mat.name().contains(t)) return mat;
+        }
+        return null;
     }
 
     private void give(String[] parts) {

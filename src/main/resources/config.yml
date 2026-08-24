@@ -27,6 +27,11 @@ behavior:
   # Max consecutive bot->bot replies to stop infinite loops
   max-bot-chain: 3
 
+# Autonomy - idle bots periodically scan their surroundings and decide what to do:
+# gather wood, craft, build, explore, or ask players if they can come join them.
+# Seconds between decisions per bot (0 = disabled).
+autonomy-interval-seconds: 60
+
 # Default settings applied to spawned bots
 defaults:
   gamemode: survival     # survival | creative  (creative = free items)

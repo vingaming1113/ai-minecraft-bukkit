@@ -39,6 +39,8 @@ public final class Bot {
     private final Deque<String[]> memory = new ArrayDeque<>(); // {role, content}
     private int botChainDepth;
     private long lastReplyAt;
+    private volatile boolean thinking;
+    private long nextAutonomyAt;
 
     Bot(AIBotPlugin plugin, String name, Location spawn, Settings settings) {
         this(plugin, name, spawn, settings, null);
@@ -145,8 +147,9 @@ public final class Bot {
     /** Asks the LLM for a response and executes its actions/speech on the main thread. */
     void think(boolean fromBot) {
         long now = System.currentTimeMillis();
-        if (now - lastReplyAt < 1500) return; // debounce
+        if (thinking || now - lastReplyAt < 1500) return; // debounce
         lastReplyAt = now;
+        thinking = true;
         if (fromBot) botChainDepth++;
 
         List<LLMService.Message> messages = new ArrayList<>();
@@ -157,6 +160,7 @@ public final class Bot {
 
         plugin.llm().chat(messages).whenComplete((reply, err) ->
                 Bukkit.getScheduler().runTask(plugin, () -> {
+                    thinking = false;
                     if (err != null) {
                         plugin.getLogger().warning("[" + name + "] AI error: " + err.getMessage());
                         speak("(my thoughts got cut off - AI error)");
@@ -164,6 +168,24 @@ public final class Bot {
                     }
                     handleReply(reply == null ? "" : reply);
                 }));
+    }
+
+    /**
+     * Autonomy: when idle, periodically scans the surroundings and lets the AI
+     * decide what to do - gather wood, build, explore, or ask a player if it can
+     * come join them (civilization).
+     */
+    void tryAutonomy(long now) {
+        long interval = plugin.autonomyIntervalMs();
+        if (interval <= 0 || walker.isBusy() || thinking) return;
+        if (now < nextAutonomyAt) return;
+        nextAutonomyAt = now + interval + ThreadLocalRandom.current().nextLong(interval / 2);
+
+        String env = EnvironmentScanner.describe(body.bukkit());
+        remember("user", "[system] You have free time right now. Your surroundings:\n" + env
+                + "\nDecide what to do next. Real players gather resources (!break), craft (!craft), build (!build) and explore (!goto random coords). "
+                + "If you feel far from civilization and there is another player online, ASK them in chat if you can come to them - if they say yes, !goto them.");
+        think(false);
     }
 
     private synchronized List<LLMService.Message> currentMemory() {
@@ -192,9 +214,11 @@ public final class Bot {
                 !goto <x> <z> | <x> <y> <z> | <player>   walk somewhere with your own legs
                 !follow <player>                          follow someone around
                 !stop                                     stop walking/following
+                !break <block> [count]                    find and break up to count blocks nearby (e.g. oak_log, stone, iron_ore) and pocket the drops - this is how you gather wood and mine
+                !break                                    break the block you are looking at
                 !craft <item> [count]                     craft items from what you carry
-                !mine                                     mine the block you look at
                 !place [item]                             place a block you carry
+                !build                                    build a tiny shelter out of blocks you carry
                 !give <player> <item> [count]
                 !drop <item>
                 !inventory                                list your inventory in chat
@@ -206,6 +230,8 @@ public final class Bot {
         sb.append("""
                 Rules:
                 - Every plain text line you write is spoken aloud in chat.
+                - You live your own life like a real player: when idle, gather wood with !break, craft planks/tools, build, or explore.
+                - To seek civilization, ask another player in chat if you can come to them; if they agree, walk (!goto) to them.
                 - Use actions instead of claiming you did something; be honest about what you carry.
                 - Keep each spoken line under ~15 words, casual gamer tone.
                 """);

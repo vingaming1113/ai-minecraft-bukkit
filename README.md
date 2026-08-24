@@ -9,7 +9,8 @@ Physical AI players for Paper **26.2** — like [mindcraft](https://github.com/k
   OpenRouter, OpenAI, Groq, DeepSeek, Mistral, xAI, Together, Ollama, LM Studio, vLLM or a custom base URL.
 - **Chats like a player** — hears chat in a radius, replies when mentioned, keeps conversation memory, and bots can talk to *each other* (with chain-limiting to prevent infinite loops).
 - **Actions** — the AI controls its own body through a simple action protocol:
-  walk (`!goto`), follow players (`!follow`), craft (`!craft`), mine (`!mine`), place blocks (`!place`), give/drop items, show inventory.
+  walk (`!goto`), follow players (`!follow`), break any block it can see (`!break oak_log 4` — how it gathers wood and mines), craft (`!craft`), build shelters (`!build`), place blocks (`!place`), give/drop items, show inventory.
+- **Autonomy** — idle bots periodically scan their surroundings (terrain, trees, water, ores, mobs, nearby players) and decide what to do like a real player: gather wood, craft tools, build, explore — or ask another player in chat if they can come join them (that's how they seek civilization).
 - **Per-bot settings** — custom username, persona, gamemode (`survival` = must gather/craft resources; `creative` = free items) and whether it may run server commands (`allow-commands`).
 - **Persistence** — bot position, inventory and settings are saved to `bots.yml` and restored on restart.
 

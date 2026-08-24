@@ -17,6 +17,7 @@ public final class AIBotPlugin extends JavaPlugin {
     private long replyDelayMinMs;
     private long replyDelayMaxMs;
     private int maxBotChain;
+    private long autonomyIntervalMs;
     private GameMode defaultGamemode;
     private boolean defaultAllowCommands;
     private String defaultPersona;
@@ -71,6 +72,7 @@ public final class AIBotPlugin extends JavaPlugin {
         replyDelayMinMs = getConfig().getLong("behavior.reply-delay-min-ms", 800);
         replyDelayMaxMs = getConfig().getLong("behavior.reply-delay-max-ms", 2500);
         maxBotChain = getConfig().getInt("behavior.max-bot-chain", 3);
+        autonomyIntervalMs = Math.max(0, getConfig().getInt("behavior.autonomy-interval-seconds", 60)) * 1000L;
         defaultPersona = getConfig().getString("defaults.persona", "You are a helpful player.");
         defaultAllowCommands = getConfig().getBoolean("defaults.allow-commands", false);
         try {
@@ -111,6 +113,10 @@ public final class AIBotPlugin extends JavaPlugin {
 
     public int maxBotChain() {
         return maxBotChain;
+    }
+
+    public long autonomyIntervalMs() {
+        return autonomyIntervalMs;
     }
 
     public GameMode defaultGamemode() {

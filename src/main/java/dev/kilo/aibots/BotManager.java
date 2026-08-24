@@ -128,6 +128,7 @@ public final class BotManager {
                     }
                     if (body.isDead()) continue;
                     b.walker().tick();
+                    b.tryAutonomy(System.currentTimeMillis());
 
                     // polish: idle bots glance at the nearest player, like real ones do
                     if (++lookTimer % 10 == 0 && !b.isBusy()) {
