@@ -26,6 +26,10 @@ public final class AIBotPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        // ship the default bot definitions - bots.yml is the single source of truth
+        if (!new java.io.File(getDataFolder(), "bots.yml").exists()) {
+            saveResource("bots.yml", false);
+        }
         loadSettings();
 
         this.llm = new LLMService(getConfig().getConfigurationSection("ai"));

@@ -166,8 +166,16 @@ public final class BotManager {
 
     // ---------- persistence ----------
 
+    private File botsFile() {
+        return new File(plugin.getDataFolder(), "bots.yml");
+    }
+
+    /**
+     * bots.yml is the single source of truth: it ships as a default resource,
+     * is edited by admins, and runtime state (position/inventory) is saved back
+     * into the exact same format - so there is never a second config to juggle.
+     */
     public void save() {
-        File file = new File(plugin.getDataFolder(), "bots.yml");
         YamlConfiguration yml = new YamlConfiguration();
         int i = 0;
         for (Bot b : bots.values()) {
@@ -191,70 +199,55 @@ public final class BotManager {
         }
         try {
             plugin.getDataFolder().mkdirs();
-            yml.save(file);
+            yml.save(botsFile());
         } catch (IOException e) {
             plugin.getLogger().warning("Could not save bots.yml: " + e.getMessage());
         }
     }
 
-    private record BotDef(String name, Location loc, Bot.Settings settings, Map<Material, Integer> inventory,
-                          String skinInput) {
-    }
-
-    /** Respawns persisted bots, falling back to config-defined ones. Skins resolve async. */
+    /** Spawns every bot defined in bots.yml at its saved position (or world spawn). */
     public void loadAll() {
         List<BotDef> defs = new ArrayList<>();
 
-        File file = new File(plugin.getDataFolder(), "bots.yml");
-        boolean restored = false;
-        if (file.exists()) {
-            YamlConfiguration yml = YamlConfiguration.loadConfiguration(file);
-            ConfigurationSection sec = yml.getConfigurationSection("bots");
-            if (sec != null) {
-                for (String key : sec.getKeys(false)) {
-                    ConfigurationSection s = sec.getConfigurationSection(key);
-                    if (s == null) continue;
-                    World world = Bukkit.getWorld(s.getString("world", "world"));
-                    if (world == null) continue;
-                    Location loc = new Location(world,
-                            s.getDouble("x"), s.getDouble("y"), s.getDouble("z"),
-                            (float) s.getDouble("yaw"), (float) s.getDouble("pitch"));
-                    GameMode gm = parseGamemode(s.getString("gamemode"));
-                    Bot.Settings st = new Bot.Settings(
-                            s.getString("persona", plugin.defaultPersona()), gm, s.getBoolean("allowCommands"),
-                            s.getString("model"));
-                    Map<Material, Integer> inv = new LinkedHashMap<>();
-                    for (String entry : s.getStringList("inventory")) {
-                        String[] split = entry.split(":");
-                        Material m = Material.matchMaterial(split[0]);
-                        if (m != null && split.length > 1) {
-                            try {
-                                inv.put(m, Integer.parseInt(split[1]));
-                            } catch (NumberFormatException ignored) {
-                            }
-                        }
+        if (!botsFile().exists()) {
+            plugin.getLogger().warning("No bots.yml found - no bots to spawn. Create one or use /aibot spawn.");
+            return;
+        }
+        YamlConfiguration yml = YamlConfiguration.loadConfiguration(botsFile());
+        ConfigurationSection sec = yml.getConfigurationSection("bots");
+        if (sec == null || sec.getKeys(false).isEmpty()) {
+            plugin.getLogger().info("bots.yml defines no bots.");
+            return;
+        }
+        for (String key : sec.getKeys(false)) {
+            ConfigurationSection s = sec.getConfigurationSection(key);
+            if (s == null) continue;
+            World world = Bukkit.getWorld(s.getString("world", Bukkit.getWorlds().get(0).getName()));
+            if (world == null) world = Bukkit.getWorlds().get(0);
+            Location loc;
+            if (s.contains("x")) {
+                loc = new Location(world,
+                        s.getDouble("x"), s.getDouble("y"), s.getDouble("z"),
+                        (float) s.getDouble("yaw"), (float) s.getDouble("pitch"));
+            } else {
+                loc = world.getSpawnLocation(); // brand-new bot from a hand-written entry
+            }
+            GameMode gm = parseGamemode(s.getString("gamemode"));
+            Bot.Settings st = new Bot.Settings(
+                    s.getString("persona", plugin.defaultPersona()), gm, s.getBoolean("allowCommands"),
+                    s.getString("model"));
+            Map<Material, Integer> inv = new LinkedHashMap<>();
+            for (String entry : s.getStringList("inventory")) {
+                String[] split = entry.split(":");
+                Material m = Material.matchMaterial(split[0]);
+                if (m != null && split.length > 1) {
+                    try {
+                        inv.put(m, Integer.parseInt(split[1]));
+                    } catch (NumberFormatException ignored) {
                     }
-                    defs.add(new BotDef(s.getString("name", "Bot" + key), loc, st, inv, s.getString("skin")));
-                    restored = true;
                 }
             }
-        }
-        if (!restored) {
-            World world = Bukkit.getWorlds().get(0);
-            for (Map<?, ?> raw : plugin.getConfig().getMapList("bots")) {
-                Map<String, Object> def = castMap(raw);
-                GameMode gm = parseGamemode(String.valueOf(def.getOrDefault("gamemode", "survival")).toUpperCase(Locale.ROOT));
-                defs.add(new BotDef(
-                        String.valueOf(def.getOrDefault("name", "Alex")),
-                        world.getSpawnLocation(),
-                        new Bot.Settings(
-                                String.valueOf(def.getOrDefault("persona", plugin.defaultPersona())),
-                                gm,
-                                Boolean.parseBoolean(String.valueOf(def.getOrDefault("allowCommands", "false"))),
-                                def.get("model") != null ? String.valueOf(def.get("model")) : null),
-                        Map.of(),
-                        def.get("skin") != null ? String.valueOf(def.get("skin")) : null));
-            }
+            defs.add(new BotDef(s.getString("name", "Bot" + key), loc, st, inv, s.getString("skin")));
         }
 
         // resolve skins off-thread, then spawn everything on the main thread
@@ -273,6 +266,10 @@ public final class BotManager {
                 }
             });
         });
+    }
+
+    private record BotDef(String name, Location loc, Bot.Settings settings, Map<Material, Integer> inventory,
+                          String skinInput) {
     }
 
     private record PendingSpawn(BotDef def, String[] tex) {

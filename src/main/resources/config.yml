@@ -27,16 +27,14 @@ behavior:
   reply-delay-max-ms: 2500
   # Max consecutive bot->bot replies to stop infinite loops
   max-bot-chain: 3
+  # Autonomy - idle bots periodically scan their surroundings and decide what to do:
+  # gather wood, craft, build, explore, or ask players if they can come join them.
+  # Seconds between decisions per bot (0 = disabled).
+  autonomy-interval-seconds: 60
+  # A random bot says hi when a player joins
+  greet-joins: true
 
-# Autonomy - idle bots periodically scan their surroundings and decide what to do:
-# gather wood, craft, build, explore, or ask players if they can come join them.
-# Seconds between decisions per bot (0 = disabled).
-autonomy-interval-seconds: 60
-
-# A random bot says hi when a player joins
-greet-joins: true
-
-# Default settings applied to spawned bots
+# Default settings applied to bots spawned via /aibot spawn without explicit options
 defaults:
   gamemode: survival     # survival | creative  (creative = free items)
   allow-commands: false   # may the bot run server commands via !command
@@ -47,11 +45,9 @@ performance:
   # ProtocolLib (required) cleans up a bot's tab-list entry when it despawns.
   # While alive the entry MUST stay, otherwise clients render the bot invisible.
 
-# Bots defined here are spawned automatically on server start (at world spawn).
-bots:
-  - name: "Alex"
-    persona: "You are Alex, a cheerful builder. You love redstone and big projects."
-    gamemode: survival
-    allow-commands: false
-    skin: "Notch"          # any premium Minecraft username (or raw base64 texture value)
-    model: ""              # optional per-bot model override, empty = use global model
+# ============================================================
+#  NOTE: bots are NOT configured here!
+#  Bot definitions (name, persona, skin, model, saved position...)
+#  live in bots.yml next to this file. Edit it and restart,
+#  or manage bots live with /aibot spawn|remove|skin|info|list.
+# ============================================================

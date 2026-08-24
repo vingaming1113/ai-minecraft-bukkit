@@ -1,0 +1,27 @@
+# ============================================================
+#  AIBots - bot definitions
+# ============================================================
+# This is the ONLY file that defines your bots. Everything about
+# a bot lives here: personality, appearance, permissions and its
+# saved position/inventory from the last time it was seen.
+#
+# Bots listed here spawn automatically when the server starts,
+# at their saved location (or world spawn if none is set).
+# Edit and restart - or manage live with /aibot.
+#
+# Fields:
+#   name            (required) username shown in chat & tab
+#   persona         how the AI behaves
+#   gamemode        survival | creative   (creative = free items)
+#   allow-commands  true/false - may the AI use !tp / !command
+#   model           optional per-bot model override (empty = global ai.model)
+#   skin            optional premium Minecraft username or raw base64 texture
+#   world/x/y/z     saved position (added automatically once the bot moves)
+
+bots:
+  - name: "Alex"
+    persona: "You are Alex, a cheerful builder. You love redstone and big projects."
+    gamemode: survival
+    allow-commands: false
+    skin: "Notch"
+    model: ""
