@@ -149,10 +149,13 @@ public final class PacketManager implements Listener {
     /** Plain snapshot of a Paper player profile (uuid/name/skin), safe to pass around. */
     public record PlayerProfileSnapshot(UUID uuid, String name, String value, String signature) {
         static PlayerProfileSnapshot of(Player player) {
+            // never trust profile.getId() - some Paper profiles throw on it
+            UUID id = player.getUniqueId();
+            String name = player.getName();
+            String value = null;
+            String signature = null;
             try {
-                var pf = player.getPlayerProfile(); // Paper profile with real properties
-                String value = null;
-                String signature = null;
+                var pf = player.getPlayerProfile();
                 for (ProfileProperty pp : pf.getProperties()) {
                     if ("textures".equals(pp.getName())) {
                         value = pp.getValue();
@@ -160,10 +163,9 @@ public final class PacketManager implements Listener {
                         break;
                     }
                 }
-                return new PlayerProfileSnapshot(pf.getId(), pf.getName(), value, signature);
-            } catch (Throwable t) {
-                return new PlayerProfileSnapshot(player.getUniqueId(), player.getName(), null, null);
+            } catch (Throwable ignored) {
             }
+            return new PlayerProfileSnapshot(id, name, value, signature);
         }
 
         boolean hasTextures() {

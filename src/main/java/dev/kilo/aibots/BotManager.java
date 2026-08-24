@@ -54,6 +54,18 @@ public final class BotManager {
         bots.values().forEach(Bot::resetChain);
     }
 
+    /**
+     * Minecraft usernames are hard-capped at 16 chars [A-Za-z0-9_]. An oversized
+     * bot name makes every player_info_update packet fail to encode, which KICKS
+     * every real player online. Validate at every entry point - no exceptions.
+     */
+    public static String sanitizeBotName(String raw) {
+        if (raw == null) return null;
+        String cleaned = raw.replaceAll("[^A-Za-z0-9_]", "");
+        if (cleaned.length() > 16) cleaned = cleaned.substring(0, 16);
+        return cleaned.isEmpty() ? null : cleaned;
+    }
+
     /** Resolves the skin off the main thread, then spawns on the main thread. */
     public void resolveAndSpawn(String name, Location loc, Bot.Settings settings,
                                 String skinInput, Consumer<Bot> done) {
@@ -268,7 +280,16 @@ public final class BotManager {
                     }
                 }
             }
-            defs.add(new BotDef(s.getString("name", "Bot" + key), loc, st, inv, s.getString("skin")));
+            String entryName = sanitizeBotName(s.getString("name", "Bot" + key));
+            if (entryName == null) {
+                plugin.getLogger().warning("bots.yml entry " + key + " has an invalid name - skipped");
+                continue;
+            }
+            if (!entryName.equals(s.getString("name"))) {
+                plugin.getLogger().warning("Bot name '" + s.getString("name") + "' is invalid (max 16 chars, "
+                        + "[A-Za-z0-9_] only) - using '" + entryName + "'");
+            }
+            defs.add(new BotDef(entryName, loc, st, inv, s.getString("skin")));
         }
 
         // resolve skins off-thread, then spawn everything on the main thread

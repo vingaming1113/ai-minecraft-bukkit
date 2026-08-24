@@ -64,8 +64,11 @@ public final class FakePlayer {
             Object clientInfo = clientInfoClass.getMethod("createDefault").invoke(null);
 
             Class<?> gameProfileClass = Class.forName("com.mojang.authlib.GameProfile");
+            // MC usernames are hard-capped at 16 chars by the protocol - an oversized
+            // name crashes EVERY client that receives this bot's info packet
+            String safeName = name.length() > 16 ? name.substring(0, 16) : name;
             Object profile = gameProfileClass.getConstructor(UUID.class, String.class)
-                    .newInstance(UUID.randomUUID(), name);
+                    .newInstance(UUID.randomUUID(), safeName);
 
             if (skinTextures != null && skinTextures.length >= 2 && skinTextures[0] != null) {
                 injectSkin(gameProfileClass, profile, skinTextures);

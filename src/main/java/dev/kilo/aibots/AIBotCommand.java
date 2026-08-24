@@ -47,7 +47,14 @@ public final class AIBotCommand implements TabExecutor {
             err(sender, "Usage: /aibot spawn <name> [skin:<player>] [model:<model>] [gamemode:survival|creative] [commands:true|false] [persona...]");
             return;
         }
-        String name = args[1];
+        String name = BotManager.sanitizeBotName(args[1]);
+        if (name == null) {
+            err(sender, "Invalid bot name - use 1-16 letters, numbers or underscores.");
+            return;
+        }
+        if (!name.equals(args[1])) {
+            ok(sender, "Bot name adjusted to '" + name + "' (max 16 chars, [A-Za-z0-9_] only).");
+        }
         GameMode gm = plugin.defaultGamemode();
         boolean allowCmds = plugin.defaultAllowCommands();
         String skinInput = null;
