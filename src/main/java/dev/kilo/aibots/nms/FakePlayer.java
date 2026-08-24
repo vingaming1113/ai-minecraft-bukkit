@@ -27,7 +27,8 @@ public final class FakePlayer {
     private final Method moveMethod;
     private final Object moverSelf;
     private final Constructor<?> vec3Ctor;
-    private final Player bukkitPlayer;
+    private volatile Player bukkitPlayer;
+    private Object playerList; // NMS PlayerList the bot was registered in
 
     private FakePlayer(Object serverPlayer, Method moveMethod, Object moverSelf,
                        Constructor<?> vec3Ctor, Player bukkitPlayer) {
@@ -133,11 +134,11 @@ public final class FakePlayer {
             bukkit.setRemoveWhenFarAway(false);
             bukkit.setPersistent(false);
 
+            FakePlayer fp = new FakePlayer(sp, move, moverSelf, vec3, bukkit);
             // register in the server's PlayerList so the bot counts as an online
             // player everywhere: selectors (@p), command tab-completion, /list
-            registerInPlayerList(sp, mcServer, bukkit);
-
-            return new FakePlayer(sp, move, moverSelf, vec3, bukkit);
+            fp.registerInPlayerList(mcServer, bukkit);
+            return fp;
         } catch (ReflectiveOperationException | RuntimeException e) {
             failed = true;
             getLoggerStatic(e);
@@ -150,14 +151,15 @@ public final class FakePlayer {
      * Without this the bot is invisible to Bukkit.getOnlinePlayers(), so vanilla
      * selectors (@p), command tab-completion and /list never see it.
      */
-    private static void registerInPlayerList(Object sp, Object mcServer, Player bukkit) {
+    private void registerInPlayerList(Object mcServer, Player bukkit) {
         try {
             Object list = mcServer.getClass().getMethod("getPlayerList").invoke(mcServer);
+            this.playerList = list;
             Field players = findField(list.getClass(), java.util.List.class, "players");
             if (players != null) {
                 @SuppressWarnings("unchecked")
                 java.util.Collection<Object> c = (java.util.Collection<Object>) players.get(list);
-                c.add(sp);
+                c.add(this.serverPlayer);
             }
             String name = bukkit.getName();
             java.util.UUID id = bukkit.getUniqueId();
@@ -165,13 +167,13 @@ public final class FakePlayer {
             if (byName != null) {
                 @SuppressWarnings("unchecked")
                 java.util.Map<Object, Object> m = (java.util.Map<Object, Object>) byName.get(list);
-                m.put(name, sp);
+                m.put(name, this.serverPlayer);
             }
             Field byUuid = findField(list.getClass(), java.util.Map.class, "playersByUUID");
             if (byUuid != null) {
                 @SuppressWarnings("unchecked")
                 java.util.Map<Object, Object> m = (java.util.Map<Object, Object>) byUuid.get(list);
-                m.put(id, sp);
+                m.put(id, this.serverPlayer);
             }
         } catch (ReflectiveOperationException | RuntimeException e) {
             org.bukkit.Bukkit.getLogger().warning("[AIBots] Could not register bot in player list: " + e);
@@ -288,6 +290,12 @@ public final class FakePlayer {
     }
 
     public Player bukkit() {
+        // vanilla respawn can swap the underlying ServerPlayer - always prefer the
+        // live instance the server knows by UUID, so health/position never go stale
+        Player live = org.bukkit.Bukkit.getPlayer(bukkitPlayer.getUniqueId());
+        if (live != null && live != bukkitPlayer) {
+            bukkitPlayer = live;
+        }
         return bukkitPlayer;
     }
 
@@ -331,6 +339,37 @@ public final class FakePlayer {
     }
 
     public void discard() {
+        // 1. scrub our PlayerList registration (players / playersByName / playersByUUID)
+        if (playerList != null) {
+            try {
+                Field players = findField(playerList.getClass(), java.util.List.class, "players");
+                if (players != null) {
+                    @SuppressWarnings("unchecked")
+                    java.util.Collection<Object> c = (java.util.Collection<Object>) players.get(playerList);
+                    c.remove(serverPlayer);
+                }
+                String name = bukkitPlayer.getName();
+                java.util.UUID id = bukkitPlayer.getUniqueId();
+                Field byName = findField(playerList.getClass(), java.util.Map.class, "playersByName");
+                if (byName != null) {
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<Object, Object> m = (java.util.Map<Object, Object>) byName.get(playerList);
+                    m.values().removeIf(v -> v == serverPlayer);
+                    m.remove(name);
+                }
+                Field byUuid = findField(playerList.getClass(), java.util.Map.class, "playersByUUID");
+                if (byUuid != null) {
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<Object, Object> m = (java.util.Map<Object, Object>) byUuid.get(playerList);
+                    m.values().removeIf(v -> v == serverPlayer);
+                    m.remove(id);
+                }
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                org.bukkit.Bukkit.getLogger().warning("[AIBots] Could not scrub player list entry: " + e);
+            }
+        }
+
+        // 2. remove the entity from the world with a proper removal reason
         try {
             Class<?> reasonClass = Class.forName("net.minecraft.world.entity.Entity$RemovalReason");
             Object discarded = Enum.valueOf((Class<? extends Enum>) reasonClass.asSubclass(Enum.class), "DISCARDED");
@@ -342,10 +381,18 @@ public final class FakePlayer {
                     break;
                 }
             }
-            if (remove != null) remove.invoke(serverPlayer, discarded);
-            else bukkitPlayer.remove();
+            if (remove != null) {
+                remove.invoke(serverPlayer, discarded);
+                return; // entity destroyed - clients get the despawn packet
+            }
         } catch (ReflectiveOperationException e) {
-            bukkitPlayer.remove();
+            org.bukkit.Bukkit.getLogger().warning("[AIBots] NMS discard failed: " + e);
+        }
+
+        // 3. last resort
+        try {
+            bukkit().remove();
+        } catch (Throwable ignored) {
         }
     }
 

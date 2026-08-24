@@ -116,6 +116,19 @@ public final class BotManager {
         return true;
     }
 
+    /** Rebuilds a dead bot as a fresh body at world spawn (same identity/settings). */
+    public void recreate(Bot old) {
+        String name = old.name();
+        Bot.Settings settings = old.settings();
+        String skin = old.skinInput();
+        Location spawnLoc = Bukkit.getWorlds().get(0).getSpawnLocation();
+        remove(name);
+        resolveAndSpawn(name, spawnLoc, settings, skin, fresh -> {
+            if (fresh != null) fresh.speak("I'm back!");
+            else plugin.getLogger().warning("[" + name + "] respawn failed - spawn manually with /aibot spawn");
+        });
+    }
+
     public void removeAll() {
         for (Bot b : List.copyOf(bots.values())) {
             remove(b.name());
@@ -140,7 +153,15 @@ public final class BotManager {
                         body.damage(1000.0);
                         continue;
                     }
-                    if (body.isDead()) continue;
+                    if (body.isDead()) {
+                        // safety net: no corpse may lie around forever - rebuild the
+                        // bot ~4s after death even if the death event was missed
+                        if (b.corpseTicks() > 80) {
+                            plugin.getLogger().info("[" + b.name() + "] force-respawning lingering corpse");
+                            recreate(b);
+                        }
+                        continue;
+                    }
                     b.walker().tick();
                     b.tryAutonomy(System.currentTimeMillis());
 

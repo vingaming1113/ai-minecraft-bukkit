@@ -42,28 +42,10 @@ public final class BotLifeListener implements Listener {
             event.getDrops().clear(); // we already dropped everything ourselves
         }
 
-        // capture identity for recreation
-        final String name = b.name();
-        final Bot.Settings settings = b.settings();
-        final String skin = b.skinInput();
-
-        // let the death message breathe, then rebuild a fresh body at world spawn
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            plugin.botManager().remove(name);
-            Bukkit.getScheduler().runTaskLater(plugin, () ->
-                    plugin.botManager().resolveAndSpawn(name,
-                            event.getEntity().getServer().getWorlds().get(0).getSpawnLocation(),
-                            settings, skin, fresh -> {
-                                if (fresh == null) {
-                                    plugin.getLogger().warning("[" + name + "] respawn failed - spawn manually with /aibot spawn");
-                                    return;
-                                }
-                                if (!survival) {
-                                    // creative keeps its items
-                                }
-                                fresh.speak("I'm back!");
-                            }), 10L);
-        }, 50L + ThreadLocalRandom.current().nextLong(20));
+        // give the death message a moment, then rebuild a fresh body at spawn
+        Bukkit.getScheduler().runTaskLater(plugin,
+                () -> plugin.botManager().recreate(b),
+                50L + ThreadLocalRandom.current().nextLong(20));
     }
 
     /** Bots greet players who join, like real ones do. */

@@ -45,6 +45,7 @@ public final class Bot {
     private long lastReplyAt;
     private volatile boolean thinking;
     private long nextAutonomyAt;
+    private int corpseTicks;
 
     Bot(AIBotPlugin plugin, String name, Location spawn, Settings settings) {
         this(plugin, name, spawn, settings, null);
@@ -96,6 +97,11 @@ public final class Bot {
 
     public boolean isBusy() {
         return walker.isBusy();
+    }
+
+    /** Tracks how long this bot has been lying around dead (ticks). */
+    int corpseTicks() {
+        return body.bukkit().isDead() ? ++corpseTicks : (corpseTicks = 0);
     }
 
     // ---------- chat ----------
