@@ -14,7 +14,8 @@ ai:
   # Only needed when provider is 'custom' or you want to override the preset.
   base-url: ""
   temperature: 0.7
-  max-tokens: 400
+  # Reasoning/thinking effort for reasoning-capable models (off = not sent).
+  reasoning-effort: medium    # off | low | medium | high
   request-timeout-seconds: 30
 
 # Global behaviour
@@ -31,6 +32,9 @@ behavior:
 # gather wood, craft, build, explore, or ask players if they can come join them.
 # Seconds between decisions per bot (0 = disabled).
 autonomy-interval-seconds: 60
+
+# A random bot says hi when a player joins
+greet-joins: true
 
 # Default settings applied to spawned bots
 defaults:

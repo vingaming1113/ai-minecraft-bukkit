@@ -117,7 +117,7 @@ public final class Bot {
 
         // natural-feeling delay
         long delay = ThreadLocalRandom.current().nextLong(plugin.replyDelayMinMs(), plugin.replyDelayMaxMs());
-        Bukkit.getScheduler().runTaskLater(plugin, () -> think(senderIsBot), delay / 50L);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> think(senderIsBot, null), delay / 50L);
     }
 
     /** Direct prompt via /aibot say - always answered. */
@@ -129,7 +129,7 @@ public final class Bot {
     }
 
     private void thinkNow() {
-        think(false);
+        think(false, null);
     }
 
     private boolean isAddressed(String message) {
@@ -144,8 +144,12 @@ public final class Bot {
         while (memory.size() > 16) memory.removeFirst();
     }
 
-    /** Asks the LLM for a response and executes its actions/speech on the main thread. */
-    void think(boolean fromBot) {
+    /**
+     * Asks the LLM for a response and executes its actions/speech on the main thread.
+     * ephemeralUserLine (if any) is shown to the model for THIS reply only and not
+     * stored in memory - used for autonomy scans so they don't pollute history.
+     */
+    void think(boolean fromBot, String ephemeralUserLine) {
         long now = System.currentTimeMillis();
         if (thinking || now - lastReplyAt < 1500) return; // debounce
         lastReplyAt = now;
@@ -155,8 +159,10 @@ public final class Bot {
         List<LLMService.Message> messages = new ArrayList<>();
         messages.add(new LLMService.Message("system", buildSystemPrompt()));
         messages.addAll(currentMemory());
-        messages.add(new LLMService.Message("user", "You are " + name
-                + ". Reply now: chat lines and/or '!' action lines."));
+        String closing = ephemeralUserLine != null
+                ? ephemeralUserLine + "\nReply now: chat lines and/or '!' action lines."
+                : "You are " + name + ". Reply now: chat lines and/or '!' action lines.";
+        messages.add(new LLMService.Message("user", closing));
 
         plugin.llm().chat(messages).whenComplete((reply, err) ->
                 Bukkit.getScheduler().runTask(plugin, () -> {
@@ -172,8 +178,8 @@ public final class Bot {
 
     /**
      * Autonomy: when idle, periodically scans the surroundings and lets the AI
-     * decide what to do - gather wood, build, explore, or ask a player if it can
-     * come join them (civilization).
+     * decide what to do - gather wood, build, explore, chat with someone, or ask
+     * a player if it can come join them (civilization).
      */
     void tryAutonomy(long now) {
         long interval = plugin.autonomyIntervalMs();
@@ -182,10 +188,14 @@ public final class Bot {
         nextAutonomyAt = now + interval + ThreadLocalRandom.current().nextLong(interval / 2);
 
         String env = EnvironmentScanner.describe(body.bukkit());
-        remember("user", "[system] You have free time right now. Your surroundings:\n" + env
-                + "\nDecide what to do next. Real players gather resources (!break), craft (!craft), build (!build) and explore (!goto random coords). "
-                + "If you feel far from civilization and there is another player online, ASK them in chat if you can come to them - if they say yes, !goto them.");
-        think(false);
+        StringBuilder prompt = new StringBuilder("[system] You have free time right now. Your surroundings:\n")
+                .append(env)
+                .append("\nDecide what to do next, like a real player would: gather resources (!break), craft (!craft), build (!build), or explore (!goto random coords). ")
+                .append("You may also just start a chat with someone by mentioning their name. ");
+        boolean hasOthers = plugin.botManager().botNamesExcluding(name) != "(none)";
+        if (hasOthers) prompt.append("Another bot is online - you can talk to them too. ");
+        prompt.append("If you feel far from civilization, ASK a player in chat if you can come to them - if they say yes, !goto them.");
+        think(false, prompt.toString());
     }
 
     private synchronized List<LLMService.Message> currentMemory() {
@@ -205,7 +215,7 @@ public final class Bot {
         sb.append("Your position: x=").append(loc.getBlockX())
                 .append(" y=").append(loc.getBlockY())
                 .append(" z=").append(loc.getBlockZ()).append(". Health: ")
-                .append(Math.round(body.bukkit().getHealth())).append("/20.\n");
+                .append(Math.round(body.bukkit().getHealth())).append("/20 (you slowly regenerate over time, and respawn at spawn if you die).\n");
         sb.append("Other bots online: ").append(plugin.botManager().botNamesExcluding(name))
                 .append(". You may talk to them by mentioning their name.\n");
         sb.append("Inventory: ").append(inventorySummary()).append('\n');

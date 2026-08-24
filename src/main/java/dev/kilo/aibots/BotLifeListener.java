@@ -7,12 +7,18 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Makes bots die and respawn like real players: on death they drop what they
- * carry (survival), stop walking, and respawn ~3 seconds later at spawn.
+ * carry (survival), stop walking, and come back ~3 seconds later at spawn.
+ * <p>
+ * We deliberately do NOT use spigot().respawn(): vanilla respawn creates a brand
+ * new ServerPlayer instance, which would leave the plugin holding a dead body
+ * whose health reads 0 forever. Recreating the bot keeps everything consistent.
  */
 public final class BotLifeListener implements Listener {
 
@@ -30,21 +36,48 @@ public final class BotLifeListener implements Listener {
 
         b.walker().stop();
         Location deathSpot = event.getEntity().getLocation();
-
-        // drop the virtual inventory like a real survival death
-        if (b.settings().gamemode() != GameMode.CREATIVE) {
+        boolean survival = b.settings().gamemode() != GameMode.CREATIVE;
+        if (survival) {
             b.dropInventoryAt(deathSpot);
             event.getDrops().clear(); // we already dropped everything ourselves
         }
 
-        // respawn after a short delay, like a player clicking "Respawn"
+        // capture identity for recreation
+        final String name = b.name();
+        final Bot.Settings settings = b.settings();
+        final String skin = b.skinInput();
+
+        // let the death message breathe, then rebuild a fresh body at world spawn
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            try {
-                event.getEntity().spigot().respawn();
-                b.speak("(ouch... respawning)");
-            } catch (Throwable t) {
-                plugin.getLogger().warning("[" + b.name() + "] respawn failed: " + t);
-            }
+            plugin.botManager().remove(name);
+            Bukkit.getScheduler().runTaskLater(plugin, () ->
+                    plugin.botManager().resolveAndSpawn(name,
+                            event.getEntity().getServer().getWorlds().get(0).getSpawnLocation(),
+                            settings, skin, fresh -> {
+                                if (fresh == null) {
+                                    plugin.getLogger().warning("[" + name + "] respawn failed - spawn manually with /aibot spawn");
+                                    return;
+                                }
+                                if (!survival) {
+                                    // creative keeps its items
+                                }
+                                fresh.speak("I'm back!");
+                            }), 10L);
         }, 50L + ThreadLocalRandom.current().nextLong(20));
+    }
+
+    /** Bots greet players who join, like real ones do. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onJoin(PlayerJoinEvent event) {
+        if (!plugin.greetJoins()) return;
+        List<Bot> all = List.copyOf(plugin.botManager().all());
+        if (all.isEmpty()) return;
+        Bot greeter = all.get(ThreadLocalRandom.current().nextInt(all.size()));
+        String joiner = event.getPlayer().getName();
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!greeter.body().bukkit().isDead()) {
+                greeter.hearDirect("[server] " + joiner + " just joined the game. Say hi!");
+            }
+        }, 60L + ThreadLocalRandom.current().nextLong(80));
     }
 }
