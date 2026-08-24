@@ -47,10 +47,11 @@ performance:
   # ProtocolLib (required) cleans up a bot's tab-list entry when it despawns.
   # While alive the entry MUST stay, otherwise clients render the bot invisible.
 
-# Bots defined here are spawned automatically on server start.
+# Bots defined here are spawned automatically on server start (at world spawn).
 bots:
   - name: "Alex"
     persona: "You are Alex, a cheerful builder. You love redstone and big projects."
     gamemode: survival
     allow-commands: false
     skin: "Notch"          # any premium Minecraft username (or raw base64 texture value)
+    model: ""              # optional per-bot model override, empty = use global model
