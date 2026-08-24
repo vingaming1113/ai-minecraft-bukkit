@@ -44,7 +44,7 @@ public final class AIBotCommand implements TabExecutor {
 
     private void spawn(CommandSender sender, String[] args) {
         if (args.length < 2) {
-            err(sender, "Usage: /aibot spawn <name> [skin:<playerName>] [gamemode:survival|creative] [commands:true|false] [persona ...]");
+            err(sender, "Usage: /aibot spawn <name> [skin:<player>] [model:<model>] [gamemode:survival|creative] [commands:true|false] [persona...]");
             return;
         }
         String name = args[1];
@@ -72,7 +72,7 @@ public final class AIBotCommand implements TabExecutor {
             }
         }
         Location loc = sender instanceof Player p ? p.getLocation() : plugin.getServer().getWorlds().get(0).getSpawnLocation();
-        final Bot.Settings settings = new Bot.Settings(persona.toString(), gm, allowCmds);
+        final Bot.Settings settings = new Bot.Settings(persona.toString(), gm, allowCmds, model);
         final String finalSkinInput = skinInput;
         ok(sender, "Resolving skin & spawning " + name + "...");
         plugin.botManager().resolveAndSpawn(name, loc, settings, skinInput, bot -> {
@@ -170,7 +170,8 @@ public final class AIBotCommand implements TabExecutor {
         sender.sendMessage(Component.text(bot.name(), NamedTextColor.GOLD));
         sender.sendMessage(Component.text("Persona: " + bot.settings().persona()));
         sender.sendMessage(Component.text("Gamemode: " + bot.settings().gamemode()
-                + " | Commands: " + (bot.settings().allowCommands() ? "allowed" : "blocked")));
+                + " | Commands: " + (bot.settings().allowCommands() ? "allowed" : "blocked")
+                + " | Model: " + (bot.settings().model() != null ? bot.settings().model() : "(global)")));
         sender.sendMessage(Component.text("Position: " + l.getBlockX() + " " + l.getBlockY() + " " + l.getBlockZ()));
         sender.sendMessage(Component.text("Inventory: " + bot.inventorySummary()));
     }
@@ -181,7 +182,7 @@ public final class AIBotCommand implements TabExecutor {
     }
 
     private void help(CommandSender sender, String label) {
-        sender.sendMessage(Component.text("/" + label + " spawn <name> [skin:<playerName>] [survival|creative] [commands:true|false] [persona...]", NamedTextColor.AQUA));
+        sender.sendMessage(Component.text("/" + label + " spawn <name> [skin:<player>] [model:<model>] [survival|creative] [commands:true|false] [persona...]", NamedTextColor.AQUA));
         sender.sendMessage(Component.text("/" + label + " skin <name> <playerName|base64Texture>", NamedTextColor.AQUA));
         sender.sendMessage(Component.text("/" + label + " remove|list|say|stop|info|reload", NamedTextColor.AQUA));
     }
