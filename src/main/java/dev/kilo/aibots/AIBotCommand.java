@@ -184,8 +184,14 @@ public final class AIBotCommand implements TabExecutor {
     }
 
     private void reload(CommandSender sender) {
-        plugin.reloadSettings();
-        ok(sender, "Reloaded config (bots unchanged).");
+        ok(sender, "Full reload - tearing down all bots...");
+        // 1. discard every bot body
+        plugin.botManager().removeAll();
+        // 2. re-read config.yml (also rebuilds the AI client: provider/key/model/effort)
+        plugin.reloadEverything();
+        // 3. fresh read of bots.yml - spawn exactly what the file says
+        plugin.botManager().loadAll();
+        ok(sender, "Reload complete: config.yml + bots.yml fully reapplied.");
     }
 
     private void help(CommandSender sender, String label) {

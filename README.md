@@ -61,7 +61,7 @@ ai:
 /aibot info <name>
 /aibot say <botName> <message>     # DM a bot directly
 /aibot stop <name>
-/aibot reload
+/aibot reload                      # FULL reload: discards all bots, re-reads config.yml AND bots.yml
 ```
 
 Permission: `aibots.admin` (default op).

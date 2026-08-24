@@ -72,6 +72,15 @@ public final class AIBotPlugin extends JavaPlugin {
         loadSettings();
     }
 
+    /** FULL reload: config.yml + a fresh LLM client. Bots are handled by BotManager. */
+    public void reloadEverything() {
+        reloadConfig();
+        loadSettings();
+        this.llm = new LLMService(getConfig().getConfigurationSection("ai"));
+        getLogger().info("AI client rebuilt - provider: " + getConfig().getString("ai.provider")
+                + ", model: " + getConfig().getString("ai.model"));
+    }
+
     private void loadSettings() {
         mentionOnly = getConfig().getBoolean("behavior.mention-only", false);
         replyDelayMinMs = getConfig().getLong("behavior.reply-delay-min-ms", 800);
