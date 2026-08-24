@@ -180,8 +180,8 @@ public final class Bot {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     thinking = false;
                     if (err != null) {
+                        // console only - spamming chat with errors looks broken
                         plugin.getLogger().warning("[" + name + "] AI error: " + err.getMessage());
-                        speak("(my thoughts got cut off - AI error)");
                         return;
                     }
                     handleReply(reply == null ? "" : reply);

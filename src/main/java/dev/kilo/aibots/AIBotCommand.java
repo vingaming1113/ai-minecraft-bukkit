@@ -2,6 +2,7 @@ package dev.kilo.aibots;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
@@ -35,6 +36,7 @@ public final class AIBotCommand implements TabExecutor {
             case "say" -> say(sender, args);
             case "stop" -> stop(sender, args);
             case "skin" -> skin(sender, args);
+            case "debug" -> debug(sender, args);
             case "reload" -> reload(sender);
             case "info" -> info(sender, args);
             default -> help(sender, label);
@@ -181,6 +183,27 @@ public final class AIBotCommand implements TabExecutor {
                 + " | Model: " + (bot.settings().model() != null ? bot.settings().model() : "(global)")));
         sender.sendMessage(Component.text("Position: " + l.getBlockX() + " " + l.getBlockY() + " " + l.getBlockZ()));
         sender.sendMessage(Component.text("Inventory: " + bot.inventorySummary()));
+    }
+
+    /** Raw LLM roundtrip test - prints exactly what the provider says or fails with. */
+    private void debug(CommandSender sender, String[] args) {
+        Bot bot = args.length >= 2 ? plugin.botManager().botByName(args[1]) : null;
+        if (bot == null && plugin.botManager().all().isEmpty()) {
+            err(sender, "No bots online to test with.");
+            return;
+        }
+        Bot b = bot != null ? bot : plugin.botManager().all().iterator().next();
+        ok(sender, "Testing AI for " + b.name() + " (model: "
+                + (b.settings().model() != null ? b.settings().model() : "global") + ")...");
+        plugin.llm().chat(List.of(new dev.kilo.aibots.llm.LLMService.Message(
+                        "user", "Say exactly: works")), b.settings().model())
+                .whenComplete((reply, err) -> Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (err != null) {
+                        sender.sendMessage(Component.text("[AIBots] FAILED: " + err.getMessage(), NamedTextColor.RED));
+                    } else {
+                        sender.sendMessage(Component.text("[AIBots] Reply: " + reply, NamedTextColor.GREEN));
+                    }
+                }));
     }
 
     private void reload(CommandSender sender) {
